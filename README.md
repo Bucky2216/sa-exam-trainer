@@ -5,8 +5,11 @@
 ```
 outputs/index.html      ← 应用本体（200 道选择题 + 20 道案例题，内联 CSS/JS，无外部依赖）
 index.html              ← 仓库首页跳转页，自动跳到上面的文件
-work/                   ← 开发与备份目录（不参与部署，已在 .gitignore 中忽略）
+tools/check.js          ← 题库校验脚本（题量配比、id 唯一性、答案与选项一致性）
+work/                   ← 本地开发/备份目录，不参与部署，已在 .gitignore 中忽略
 ```
+
+> 应用本体只有一个 HTML 文件，CSS 和 JS 全部内联，因此不存在构建步骤，任何静态托管都能直接跑。
 
 ## 本地怎么打开
 
@@ -80,5 +83,5 @@ https://<你的用户名>.github.io/<仓库名>/
 
 在 `outputs/index.html` 里找到 `QUESTION_BANK` / `CASE_BANK` 数组，按同样结构追加对象即可
 （保存后刷新页面生效）。也可以把题库整理成 JSON 后用页面顶部的「导入」按钮灌入，
-题量与统计会自动更新。校验脚本见 `work/check.js`（`node work/check.js`），
-会检查题量配比、id 唯一性、答案与选项一致性。
+题量与统计会自动更新。改完题库可执行 `node tools/check.js` 校验：
+题量配比、id 唯一性、答案与选项是否对应。
