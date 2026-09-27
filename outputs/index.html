@@ -735,8 +735,12 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
     </div>
     <div class="field" style="margin-top:8px">
       <label>模型</label>
-      <input type="text" id="aiModelInput" placeholder="deepseek-chat">
+      <input type="text" id="aiModelInput" placeholder="deepseek-flash">
     </div>
+    <label class="switch" style="margin-top:12px">
+      <input type="checkbox" id="aiThinkingInput">
+      启用思考模式（更慢、更贵，解析更深入；默认关闭以省钱）
+    </label>
     <div class="row" style="justify-content:flex-end; margin-top:16px">
       <button class="btn soft" id="btnAiCancel">取消<span class="kbd-hint">（Esc）</span></button>
       <button class="btn" id="btnAiSave">保存<span class="kbd-hint">（Enter）</span></button>
@@ -2940,7 +2944,11 @@ function defaultState(){
     caseNotes:{},         // 案例题笔记：{ caseId: text }
     caseOpen:{},          // 案例题展开状态（不持久化界面细节时可忽略）
     practice:{ mode:'seq', module:'', difficulty:'', idx:0, list:null, answered:{}, pending:{}, rote:false },
-    ai:{ key:'', base:'https://api.deepseek.com', model:'deepseek-chat' },  // AI 解析配置（Key 仅存本机）
+    // AI 考点解析配置（Key 仅存本机）。
+    // 模型名说明：deepseek-chat / deepseek-reasoner 是旧名，已于 2026-07-24 停止服务，
+    // 当前可用名为 deepseek-flash（DeepSeek-V4.1-Flash，最便宜）与 deepseek-v4-pro。
+    // thinking 默认关闭：思考模式会额外产生思维链 token（按输出价计费），解析任务不需要。
+    ai:{ key:'', base:'https://api.deepseek.com', model:'deepseek-flash', thinking:false },
     aiExplain:{},         // AI 生成的解析：{ qid: text }
     examDraft:null,       // 未完成的考试草稿
     examHistory:[]        // 历史考试成绩
@@ -2954,6 +2962,13 @@ function loadState(){
     const base = defaultState();
     const merged = Object.assign(base, parsed);
     merged.practice = Object.assign(defaultState().practice, parsed.practice || {});
+    // 兼容旧配置：把已停用的旧模型名自动升级为新模型名，避免用户点解析时报错
+    if(merged.ai){
+      if(/^deepseek-(chat|reasoner)$/i.test(String(merged.ai.model || '').trim())){
+        merged.ai.model = 'deepseek-flash';
+      }
+      if(typeof merged.ai.thinking !== 'boolean') merged.ai.thinking = false;
+    }
     return merged;
   }catch(e){
     console.warn('读取本地数据失败，已使用默认状态', e);
@@ -3306,14 +3321,17 @@ async function callDeepSeek(q){
         'Authorization':'Bearer ' + cfg.key
       },
       body: JSON.stringify({
-        model: cfg.model || 'deepseek-chat',
+        model: cfg.model || 'deepseek-flash',
         messages:[
           { role:'system', content:'你是软考高级系统分析师辅导老师。你只做“考点解析”：讲清知识点本身、易混点与应试技巧，不分析具体选项的对错。输出要精简、分点、口语化。' },
           { role:'user', content: buildAiPrompt(q) }
         ],
         temperature: 0.3,
         max_tokens: 500,
-        stream: false
+        stream: false,
+        // 思考模式：默认关闭。开启后模型会先输出思维链（按输出 token 计费），
+        // 解析更深入但更慢更贵；可在「AI 设置」里切换。
+        thinking: { type: cfg.thinking ? 'enabled' : 'disabled' }
       })
     });
   }catch(e){
@@ -3325,6 +3343,10 @@ async function callDeepSeek(q){
     if(res.status === 401) throw new Error('API Key 无效或已过期（401）' + (detail ? '：' + detail : ''));
     if(res.status === 402) throw new Error('账户余额不足（402）');
     if(res.status === 429) throw new Error('请求过于频繁（429），稍后再试');
+    // 模型名失效是常见的失败原因（DeepSeek 会定期下线旧模型名），这里给出可操作的提示
+    if(res.status === 400 && /model/i.test(detail)){
+      throw new Error('模型名不可用（' + detail + '），请在「AI 设置」里把模型改成 deepseek-flash');
+    }
     throw new Error('接口返回 HTTP ' + res.status + (detail ? '：' + detail : ''));
   }
   const data = await res.json();
@@ -3375,7 +3397,8 @@ function aiBlockHTML(q){
 function openAiSettings(){
   $('#aiKeyInput').value = (state.ai && state.ai.key) || '';
   $('#aiBaseInput').value = (state.ai && state.ai.base) || 'https://api.deepseek.com';
-  $('#aiModelInput').value = (state.ai && state.ai.model) || 'deepseek-chat';
+  $('#aiModelInput').value = (state.ai && state.ai.model) || 'deepseek-flash';
+  $('#aiThinkingInput').checked = !!(state.ai && state.ai.thinking);
   $('#aiModal').classList.remove('hidden');
   $('#aiKeyInput').focus();
 }
@@ -3386,7 +3409,8 @@ function saveAiSettings(){
   state.ai = {
     key: $('#aiKeyInput').value.trim(),
     base: $('#aiBaseInput').value.trim() || 'https://api.deepseek.com',
-    model: $('#aiModelInput').value.trim() || 'deepseek-chat'
+    model: $('#aiModelInput').value.trim() || 'deepseek-flash',
+    thinking: $('#aiThinkingInput').checked
   };
   save();
   closeAiSettings();
