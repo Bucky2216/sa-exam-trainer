@@ -738,9 +738,12 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
     </label>
     <div class="guide small" id="syncInfoBox" style="margin-top:12px"></div>
     <div class="small muted" style="margin-top:10px">
-      获取 Token：GitHub → Settings → Developer settings → Personal access tokens →
-      Tokens (classic) → Generate new token → 只勾 <b>gist</b> → 生成后粘贴到这里。<br>
-      Token 仅存在本机浏览器、不会上传；DeepSeek 的 API Key 不参与同步。
+      获取 Token：打开
+      <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=sa-exam-trainer-sync" target="_blank" rel="noopener">
+        创建 Token 页面（已预勾选 gist 权限）</a>
+      → 拉到底点 <b>Generate token</b> → 复制 <code>ghp_...</code> 粘贴到上面的输入框。<br>
+      也可以手动走：GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → 勾 <b>gist</b>。<br>
+      Token 只显示一次，请当场复制；它仅存在本机浏览器、不会上传，DeepSeek 的 API Key 也不参与同步。
     </div>
     <div class="row" style="justify-content:flex-end; margin-top:16px">
       <button class="btn soft" id="btnSyncCancel">取消</button>
