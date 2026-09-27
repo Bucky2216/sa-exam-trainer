@@ -1,0 +1,6 @@
+# 开发与备份目录，不参与部署
+work/
+
+# 系统杂项
+.DS_Store
+Thumbs.db
