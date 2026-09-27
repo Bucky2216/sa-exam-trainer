@@ -698,6 +698,41 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
   </div>
 </div>
 
+<!-- ============================ 跨端同步设置 ============================ -->
+<div class="modal-bg hidden" id="syncModal">
+  <div class="modal" style="max-width:560px">
+    <h3>跨端同步（GitHub Gist）</h3>
+    <div class="small muted" style="margin-top:6px">
+      把学习记录同步到你 GitHub 账号下的一个 <b>secret Gist</b>，手机和电脑就能互通。
+      不需要服务器，也不额外花钱，数据只存在你自己的账号里。
+    </div>
+    <div class="field" style="margin-top:12px">
+      <label>GitHub Token（需勾选 gist 权限）</label>
+      <input type="password" id="syncTokenInput" placeholder="ghp_xxx 或 github_pat_xxx" autocomplete="new-password" spellcheck="false">
+    </div>
+    <div class="field" style="margin-top:8px">
+      <label>Gist ID（留空即可，首次同步会自动创建）</label>
+      <input type="text" id="syncGistInput" placeholder="留空自动创建；另一台设备把这串 ID 填进来即可" spellcheck="false">
+    </div>
+    <label class="switch" style="margin-top:10px">
+      <input type="checkbox" id="syncAutoInput">
+      自动同步（打开页面时合并一次，答题后 20 秒再合并一次）
+    </label>
+    <div class="guide small" id="syncInfoBox" style="margin-top:12px"></div>
+    <div class="small muted" style="margin-top:10px">
+      获取 Token：GitHub → Settings → Developer settings → Personal access tokens →
+      Tokens (classic) → Generate new token → 只勾 <b>gist</b> → 生成后粘贴到这里。<br>
+      Token 仅存在本机浏览器、不会上传；DeepSeek 的 API Key 不参与同步。
+    </div>
+    <div class="row" style="justify-content:flex-end; margin-top:16px">
+      <button class="btn soft" id="btnSyncCancel">取消</button>
+      <button class="btn soft" id="btnSyncOverwrite">用本机覆盖云端</button>
+      <button class="btn" id="btnSyncSave">保存</button>
+      <button class="btn ok" id="btnSyncNow">立即同步</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 底部常驻操作条（练习 / 考试通用，内容由渲染层填充） -->
@@ -2949,6 +2984,8 @@ function defaultState(){
     // 当前可用名为 deepseek-flash（DeepSeek-V4.1-Flash，最便宜）与 deepseek-v4-pro。
     // thinking 默认关闭：思考模式会额外产生思维链 token（按输出价计费），解析任务不需要。
     ai:{ key:'', base:'https://api.deepseek.com', model:'deepseek-flash', thinking:false },
+    // 跨端同步配置（存在你的 GitHub 账号下的 secret Gist 里；Token 仅本机保存，不参与同步）
+    sync:{ token:'', gistId:'', auto:false, lastSync:0 },
     aiExplain:{},         // AI 生成的解析：{ qid: text }
     examDraft:null,       // 未完成的考试草稿
     examHistory:[]        // 历史考试成绩
@@ -3026,6 +3063,8 @@ function recordResult(qid, correct){
     w.count += 1; w.ts = Date.now();
     state.wrong[qid] = w;
   }
+
+  scheduleAutoSync();     // 开启自动同步时，答题后延迟 20 秒会把记录同步到云端
 }
 
 /** 累计答题次数（含重复作答） */
@@ -3391,6 +3430,265 @@ function aiBlockHTML(q){
   if(text) h += '<div class="ai-text">' + esc(text) + '</div>';
   else if(loading) h += '<div class="ai-text pending">正在生成考点解析…</div>';
   return h + '</div>';
+}
+
+/* ------------------------- 跨端同步（GitHub Gist） -------------------------
+   设计说明：
+   · 存储：把学习记录打包成一个 JSON，存到你 GitHub 账号下的一个 secret Gist，
+     不需要自建服务器或数据库，不额外花钱。
+   · 安全：Token 只保存在本机 localStorage，仅用于访问你自己的 Gist；
+     DeepSeek API Key 等敏感配置不参与同步。
+   · 合并策略「并集、取多不取少」，双向同步不会覆盖丢数据：
+     答题次数/正确数、错题次数取较大值；笔记与考点解析本机优先、云端缺的补齐；
+     模拟考成绩按时间戳去重合并。
+   · 自动同步：开启后打开页面会合并一次，答题后延迟 20 秒再合并一次。 */
+
+const GH_API = 'https://api.github.com';
+const SYNC_FILE = 'sa-exam-progress.json';
+
+/** 打包需要同步的数据（只含学习记录，不含任何密钥） */
+function packSyncPayload(){
+  return {
+    v: 1,
+    app: 'sa-exam-trainer',
+    updatedAt: Date.now(),
+    data: {
+      records: state.records, daily: state.daily, wrong: state.wrong, fav: state.fav,
+      notes: state.notes, aiExplain: state.aiExplain, caseNotes: state.caseNotes,
+      examHistory: state.examHistory
+    }
+  };
+}
+
+function maxNum(a, b){ return Math.max(Number(a) || 0, Number(b) || 0); }
+
+/**
+ * 把云端数据合并进本地（只增不减，双向同步不会丢数据）。
+ * @returns {{changed:number, hasRemote:boolean}}
+ */
+function mergeSyncPayload(remote){
+  const d = remote && remote.data;
+  if(!d) return { changed: 0, hasRemote: false };
+  let changed = 0;
+
+  // 题目掌握记录：seen / correct 各自取大，并保证 correct ≤ seen
+  Object.keys(d.records || {}).forEach(function(id){
+    const r = d.records[id] || {};
+    const cur = state.records[id] || { seen:0, correct:0 };
+    const seen = maxNum(cur.seen, r.seen);
+    const correct = Math.min(seen, maxNum(cur.correct, r.correct));
+    if(seen !== cur.seen || correct !== cur.correct){
+      state.records[id] = { seen: seen, correct: correct }; changed++;
+    }
+  });
+  // 每日答题量：同样取大
+  Object.keys(d.daily || {}).forEach(function(k){
+    const r = d.daily[k] || {};
+    const cur = state.daily[k] || { total:0, correct:0 };
+    const total = maxNum(cur.total, r.total);
+    const correct = Math.min(total, maxNum(cur.correct, r.correct));
+    if(total !== cur.total || correct !== cur.correct){
+      state.daily[k] = { total: total, correct: correct }; changed++;
+    }
+  });
+  // 错题本：次数与时间取大，云端有而本机没有的直接补上
+  Object.keys(d.wrong || {}).forEach(function(id){
+    const r = d.wrong[id] || {};
+    const cur = state.wrong[id];
+    if(!cur){ state.wrong[id] = { count: r.count || 1, ts: r.ts || Date.now() }; changed++; return; }
+    const count = maxNum(cur.count, r.count);
+    const ts = Math.max(cur.ts || 0, r.ts || 0);
+    if(count !== cur.count || ts !== cur.ts){ state.wrong[id] = { count: count, ts: ts }; changed++; }
+  });
+  // 收藏：并集（已取消的收藏不会被云端重新拉回来）
+  Object.keys(d.fav || {}).forEach(function(id){
+    if(!state.fav[id]){ state.fav[id] = d.fav[id] || Date.now(); changed++; }
+  });
+  // 笔记 / 考点解析 / 案例笔记：本机优先，云端缺的补齐
+  [['notes', d.notes], ['aiExplain', d.aiExplain], ['caseNotes', d.caseNotes]].forEach(function(pair){
+    const key = pair[0], remoteMap = pair[1] || {};
+    Object.keys(remoteMap).forEach(function(id){
+      if(!state[key][id]){ state[key][id] = remoteMap[id]; changed++; }
+    });
+  });
+  // 模拟考成绩：按时间戳去重合并
+  const seenTs = {};
+  state.examHistory.forEach(function(h){ seenTs[h.ts] = true; });
+  (d.examHistory || []).forEach(function(h){
+    if(h && h.ts && !seenTs[h.ts]){ state.examHistory.push(h); seenTs[h.ts] = true; changed++; }
+  });
+  state.examHistory.sort(function(a, b){ return a.ts - b.ts; });
+  return { changed: changed, hasRemote: true };
+}
+
+/** 调用 GitHub API（统一错误提示） */
+async function ghApi(path, options){
+  const opts = Object.assign({ method:'GET' }, options || {});
+  opts.headers = Object.assign({
+    'Accept':'application/vnd.github+json',
+    'Authorization':'Bearer ' + (state.sync.token || ''),
+    'X-GitHub-Api-Version':'2022-11-28'
+  }, opts.headers || {});
+  if(opts.body) opts.headers['Content-Type'] = 'application/json';
+  let res;
+  try{
+    res = await fetch(GH_API + path, opts);
+  }catch(e){
+    throw new Error('网络或跨域请求失败，请检查网络后重试');
+  }
+  if(res.status === 401) throw new Error('Token 无效或已过期（401），请重新生成一个');
+  if(res.status === 403) throw new Error('权限不足或触发限流（403），请确认 Token 勾选了 gist 权限');
+  if(res.status === 404) throw new Error('Gist 不存在或无权访问（404），请检查 Gist ID');
+  if(!res.ok){
+    let detail = '';
+    try{ const j = await res.json(); detail = (j && j.message) || ''; }catch(e){}
+    throw new Error('GitHub 返回 HTTP ' + res.status + (detail ? '：' + detail : ''));
+  }
+  return res.json();
+}
+
+/** 读取云端数据（未配置 Gist 或文件为空时返回 null） */
+async function fetchCloudPayload(){
+  if(!state.sync.gistId) return null;
+  const gist = await ghApi('/gists/' + state.sync.gistId);
+  const file = gist && gist.files && gist.files[SYNC_FILE];
+  if(!file || !file.content) return null;
+  try{ return JSON.parse(file.content); }
+  catch(e){ throw new Error('云端数据格式异常，无法解析'); }
+}
+
+/** 写入云端：没有 Gist 就先创建（secret），创建后把 ID 回填到设置里 */
+async function pushCloudPayload(payload){
+  const files = {}; files[SYNC_FILE] = { content: JSON.stringify(payload) };
+  if(!state.sync.gistId){
+    const gist = await ghApi('/gists', {
+      method:'POST',
+      body: JSON.stringify({
+        description: '软考系统分析师刷题系统 · 学习记录同步（自动生成）',
+        public: false,
+        files: files
+      })
+    });
+    state.sync.gistId = gist.id;
+    save();
+    // 回填输入框：用户要拿这串 ID 到另一台设备填写
+    if($('#syncGistInput')) $('#syncGistInput').value = gist.id;
+    renderSyncInfo();
+  }else{
+    await ghApi('/gists/' + state.sync.gistId, {
+      method:'PATCH', body: JSON.stringify({ files: files })
+    });
+  }
+}
+
+/** 立即同步：先拉云端合并到本机，再把结果写回云端（双向，不丢数据） */
+/**
+ * 把设置弹窗里的输入收集进状态。
+ * 用户经常填完 Token 直接点「立即同步」而忘记先点保存，这里兜一层，
+ * 避免出现“明明填了却提示未填写”的困惑。
+ */
+function collectSyncForm(){
+  if(!isSyncModalOpen()) return;
+  const token = $('#syncTokenInput').value.trim();
+  if(token) state.sync.token = token;
+  state.sync.gistId = $('#syncGistInput').value.trim();
+  state.sync.auto = $('#syncAutoInput').checked;
+  save();
+}
+
+async function syncNow(silent){
+  collectSyncForm();
+  const cfg = state.sync;
+  if(!cfg.token){
+    if(!silent){ openSyncSettings(); toast('请先填写 GitHub Token'); }
+    return false;
+  }
+  try{
+    if(!silent) toast('正在同步…');
+    const remote = await fetchCloudPayload();
+    const merged = mergeSyncPayload(remote);
+    await pushCloudPayload(packSyncPayload());
+    cfg.lastSync = Date.now();
+    save(); render();
+    renderSyncInfo();          // 设置弹窗开着时同步刷新状态行
+    toast('同步完成' + (merged.changed ? '：从云端合并 ' + merged.changed + ' 项' : '：云端与本机已一致'), 'ok');
+    return true;
+  }catch(e){
+    console.warn(e);
+    toast('同步失败：' + e.message, 'err');
+    return false;
+  }
+}
+
+/** 用本机数据整体覆盖云端（有确认框） */
+function syncOverwrite(){
+  collectSyncForm();
+  if(!state.sync.token){ openSyncSettings(); toast('请先填写 GitHub Token'); return; }
+  showConfirm({
+    title: '用本机覆盖云端',
+    message: '将把本机学习记录整体写入云端，云端已有的记录会被覆盖。\n一般不需要这样做——直接用「立即同步」即可双向合并。',
+    okText: '确认覆盖', danger: true
+  }).then(async function(ok){
+    if(!ok) return;
+    try{
+      await pushCloudPayload(packSyncPayload());
+      state.sync.lastSync = Date.now(); save(); render();
+      toast('已用本机记录覆盖云端', 'ok');
+    }catch(e){
+      toast('覆盖失败：' + e.message, 'err');
+    }
+  });
+}
+
+/* 自动同步：答题后延迟 20 秒合并一次，避免频繁请求 */
+let autoSyncTimer = null;
+function scheduleAutoSync(){
+  if(!state.sync.auto || !state.sync.token) return;
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(function(){ syncNow(true); }, 20000);
+}
+
+/* ------------------------- 跨端同步：设置界面 ------------------------- */
+
+/** 渲染同步设置里的状态说明（本机记录概况 / Gist / 上次同步时间） */
+function renderSyncInfo(){
+  const box = $('#syncInfoBox');
+  if(!box) return;
+  const cfg = state.sync;
+  const lines = [
+    '本机记录：已答 ' + Object.keys(state.records).length + ' 题 · 错题 ' + Object.keys(state.wrong).length +
+      ' · 收藏 ' + Object.keys(state.fav).length + ' · 笔记 ' + Object.keys(state.notes).length + ' 条',
+    'Token：' + (cfg.token
+      ? '已保存（' + esc(String(cfg.token).slice(0, 6)) + '****，仅本机）'
+      : '未配置'),
+    'Gist：' + esc(cfg.gistId || '尚未创建（首次同步时自动创建）'),
+    '上次同步：' + (cfg.lastSync ? new Date(cfg.lastSync).toLocaleString() : '从未同步')
+  ];
+  box.innerHTML = lines.join('<br>');
+}
+
+function openSyncSettings(){
+  const cfg = state.sync;
+  $('#syncTokenInput').value = cfg.token || '';
+  $('#syncGistInput').value = cfg.gistId || '';
+  $('#syncAutoInput').checked = !!cfg.auto;
+  renderSyncInfo();
+  $('#syncModal').classList.remove('hidden');
+  $('#syncTokenInput').focus();
+}
+function closeSyncSettings(){ $('#syncModal').classList.add('hidden'); }
+function isSyncModalOpen(){ return !$('#syncModal').classList.contains('hidden'); }
+
+/** 保存同步配置（Token 与 Gist ID 只写本机 localStorage） */
+function saveSyncSettings(){
+  state.sync.token = $('#syncTokenInput').value.trim();
+  state.sync.gistId = $('#syncGistInput').value.trim();
+  state.sync.auto = $('#syncAutoInput').checked;
+  save();
+  closeSyncSettings();
+  toast('同步设置已保存到本机', 'ok');
+  // 刚打开自动同步时，立刻同步一次（不打扰用户，失败也会在弹窗里看到下次状态）
+  if(state.sync.auto && state.sync.token) syncNow(true);
 }
 
 /** 打开 AI 设置弹窗并回填当前配置 */
@@ -4144,10 +4442,18 @@ function renderStats(){
   html += '<div class="card"><h3>数据管理</h3>' +
     '<div class="muted small">所有数据保存在本浏览器 localStorage 中（键名 ' + STORAGE_KEY + '）。更换设备或清理浏览器数据前请先导出备份。</div>' +
     '<div class="row" style="margin-top:10px">' +
+      '<button class="btn" id="btnSync">云同步（跨设备）</button>' +
       '<button class="btn soft" id="btnExport2">导出题库 + 学习记录</button>' +
       '<button class="btn soft" id="btnExportRecords">仅导出学习记录</button>' +
       '<button class="btn soft" id="btnImport2">导入 JSON</button>' +
       '<button class="btn danger" id="btnClearRecords">清空学习记录</button>' +
+    '</div>' +
+    '<div class="small muted" style="margin-top:8px">' +
+      (state.sync.gistId
+        ? '云同步已配置：Gist ' + esc(String(state.sync.gistId).slice(0, 10)) + '…，上次同步 ' +
+          (state.sync.lastSync ? new Date(state.sync.lastSync).toLocaleString() : '未同步') +
+          (state.sync.auto ? '（已开启自动同步）' : '（手动同步）')
+        : '云同步未配置：配置一次后，手机与电脑的进度、错题、笔记可以互通（用你自己的 GitHub Gist 存放）') +
     '</div>' +
     '<div class="small muted" style="margin-top:8px">导入支持两种文件：① 完整备份（含 questions / cases / state）；② 纯题库（含 questions 数组），按 id 合并覆盖同 id 题目。</div>' +
   '</div>';
@@ -4542,6 +4848,12 @@ function bindEvents(){
     /* —— 顶部 —— */
     if(t.closest('#btnTheme')){ state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(); save(); return; }
     if(t.closest('#btnImport') || t.closest('#btnImport2')){ $('#fileInput').click(); return; }
+    /* —— 跨端同步 —— */
+    if(t.closest('#btnSync')){ openSyncSettings(); return; }
+    if(t.closest('#btnSyncSave')){ saveSyncSettings(); return; }
+    if(t.closest('#btnSyncNow')){ syncNow(false); return; }
+    if(t.closest('#btnSyncOverwrite')){ syncOverwrite(); return; }
+    if(t.closest('#btnSyncCancel')){ closeSyncSettings(); return; }
     if(t.closest('#btnExport') || t.closest('#btnExport2')){ exportAll(); return; }
     if(t.closest('#btnExportRecords')){ exportRecords(); return; }
     if(t.closest('#btnClearRecords')){
@@ -4554,9 +4866,12 @@ function bindEvents(){
         if(!ok) return;
         const theme = state.theme;
         const aiCfg = state.ai;          // AI 接口配置不属于学习记录，清空时保留
+        const syncCfg = state.sync;      // 同步配置（Token / Gist ID）同样保留，
+                                         // 这样清空后可以直接「立即同步」把云端记录拉回来
         state = defaultState();
         state.theme = theme;
         state.ai = aiCfg || state.ai;
+        state.sync = syncCfg || state.sync;
         save(); render(); toast('学习记录已清空', 'ok');
       });
       return;
@@ -4739,9 +5054,13 @@ function bindEvents(){
     const tag = (ev.target.tagName || '').toLowerCase();
     const inField = tag === 'input' || tag === 'textarea' || tag === 'select';
 
-    /* AI 设置弹窗打开时：只处理 Esc 关闭，其余按键交给输入框正常输入 */
-    if(isAiModalOpen()){
-      if(ev.key === 'Escape'){ ev.preventDefault(); closeAiSettings(); }
+    /* 设置弹窗（AI / 云同步）打开时：只处理 Esc 关闭，其余按键交给输入框正常输入 */
+    if(isAiModalOpen() || isSyncModalOpen()){
+      if(ev.key === 'Escape'){
+        ev.preventDefault();
+        if(isAiModalOpen()) closeAiSettings();
+        if(isSyncModalOpen()) closeSyncSettings();
+      }
       return;
     }
 
@@ -4940,6 +5259,10 @@ function init(){
     MODULES.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
   bindEvents();
   render();
+  // 开启自动同步时，打开页面先与云端合并一次（静默执行，失败只在控制台提示）
+  if(state.sync && state.sync.auto && state.sync.token){
+    setTimeout(function(){ syncNow(true); }, 1500);
+  }
   if(!Object.keys(state.records).length){
     console.log('%c软考高级 · 系统分析师刷题系统已就绪','color:#1e3a8a;font-weight:bold');
   }
