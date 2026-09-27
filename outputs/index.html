@@ -319,23 +319,53 @@ body.has-actionbar footer.foot{display:none}                          /* 答题�
 #practiceCard{scroll-margin-top:96px}                                 /* 普通模式下避开吸顶导航 */
 body.has-actionbar #practiceCard{scroll-margin-top:8px}               /* 一屏模式下题目区自身滚动 */
 
-/* 窄屏：操作条回退为底部横排 */
-@media (max-width:820px){
+/* 窄屏或矮屏（手机竖屏、手机横屏、窄窗口）：操作条回退为底部横排 */
+@media (max-width:820px), (max-height:520px){
   .actionbar{
     left:0; right:0; top:auto; bottom:0; transform:none;
     width:auto; max-height:none; overflow-y:visible;
     border:1px solid var(--border); border-bottom:none; border-radius:12px 12px 0 0;
     box-shadow:0 -4px 16px rgba(15,23,42,.10);
-    padding:8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
   }
   .actionbar .inner{
-    flex-direction:row; align-items:center; gap:8px;
+    flex-direction:row; align-items:center; gap:6px;
     overflow-x:auto; white-space:nowrap; scrollbar-width:none;
   }
   .actionbar .inner::-webkit-scrollbar{display:none}
-  .actionbar .inner .btn{width:auto}
-  .actionbar .info{border-bottom:none; padding-bottom:0; margin-bottom:0; white-space:nowrap}
-  body.has-actionbar main{padding-right:16px; padding-bottom:84px}
+  /* 触控友好：按钮高度 44px；并让按钮等分剩余宽度，
+     手机上一屏就能放下全部按钮，不需要横向滑动 */
+  .actionbar .inner .btn{
+    flex:1 1 0; min-width:0; width:auto;
+    min-height:44px; padding:10px 6px; font-size:14px; border-radius:9px;
+  }
+  .actionbar .info{flex:0 0 auto; border-bottom:none; padding-bottom:0; margin-bottom:0;
+    white-space:nowrap; font-size:11px; line-height:1.3}
+  body.has-actionbar main{padding-right:16px; padding-bottom:74px}
+
+  /* 顶部页签与通用按钮同样加大到适合手指点击 */
+  .tab{padding:10px 14px; font-size:15px}
+  .btn.sm{padding:8px 10px; font-size:13px}
+  .opt{padding:13px 14px}
+  /* 工具卡压到两行：标题+摘要一行，按钮一行，把高度让给题目 */
+  #practiceToolbar{padding:10px 12px}
+  #practiceToolbar h2{font-size:15px}
+  #practiceToolbar .row{gap:6px}
+  /* iOS Safari 会对字号小于 16px 的输入框自动放大页面，这里统一提到 16px */
+  input,select,textarea{font-size:16px}
+  /* 手机上无需展示键盘进度行，避免顶部占两行 */
+  #globalProgressText{display:none}
+  /* 手机没有物理键盘：隐藏带快捷键提示的文字与入口，给内容腾地方 */
+  .kbd-hint,.kbd-only{display:none}
+  /* 触屏下把主要操作按钮一并放大到 44px 左右 */
+  .ai-box .btn{min-height:44px; padding:10px 14px; font-size:14px}
+  .appbar-top .iconbtn{min-height:36px; padding:8px 10px}
+  #confirmModal .modal .btn{min-height:44px; padding:11px 16px}
+  #examStartPanel .btn{min-height:44px; padding:11px 16px; font-size:15px}
+  /* 提示条上移，避免盖住底部操作条 */
+  .toast{bottom:84px}
+  /* 考试页在手机上只保留底部操作条，隐藏重复的入口 */
+  .desktop-only{display:none}
 }
 
 /* 紧凑排版：压缩题干、选项、解析的间距，尽量把一题装进一屏 */
@@ -385,6 +415,23 @@ kbd{
 }
 
 /* ============================ 响应式细节 ============================ */
+/* 矮屏（手机横屏、窗口压扁）：压缩顶栏，把高度尽量让给题目 */
+@media (max-height:520px){
+  .appbar-top{padding:6px 12px; gap:8px}
+  .brand{font-size:15px}
+  .brand small{display:none}
+  .iconbtn{padding:5px 8px; font-size:13px}
+  nav.tabs{padding:0 8px 6px}
+  .tab{padding:7px 12px; font-size:14px}
+  .progress-wrap{margin-top:2px}
+  .progress-text{font-size:11px}
+  .card{margin-bottom:8px}
+  #practiceToolbar{padding:8px 12px}
+  #practiceCard .stem{font-size:15px; margin:5px 0 8px}
+  .opt{padding:10px 12px}
+  .explain{max-height:46vh}
+}
+
 @media (max-width:640px){
   /* 顶栏在窄屏隐藏副标题、压缩按钮，避免横向溢出 */
   .brand{font-size:15px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -446,9 +493,9 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
         </div>
         <div class="row">
           <label class="switch"><input type="checkbox" id="chkRote"> 背题模式</label>
-          <button class="btn sm soft" id="btnToggleFilters" title="展开或收起筛选设置（快捷键 T）">筛选设置（T）</button>
+          <button class="btn sm soft" id="btnToggleFilters" title="展开或收起筛选设置（快捷键 T）">筛选设置<span class="kbd-hint">（T）</span></button>
           <button class="btn sm soft" id="btnAiSetting" title="配置 DeepSeek API Key，用于生成考点解析">AI 设置</button>
-          <button class="btn sm soft" id="btnHelp" title="查看全部键盘快捷键（按 ? 也可打开）">快捷键 ?</button>
+          <button class="btn sm soft kbd-only" id="btnHelp" title="查看全部键盘快捷键（按 ? 也可打开）">快捷键 ?</button>
           <button class="btn sm soft" id="btnRestartPractice">重新开始</button>
         </div>
       </div>
@@ -505,8 +552,8 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
           </div>
           <div class="row">
             <span class="timer" id="examTimer">150:00</span>
-            <button class="btn sm soft" id="btnExamMark">标记本题</button>
-            <button class="btn sm danger" id="btnExamSubmit">交卷</button>
+            <button class="btn sm soft desktop-only" id="btnExamMark">标记本题</button>
+            <button class="btn sm danger desktop-only" id="btnExamSubmit">交卷</button>
           </div>
         </div>
       </div>
@@ -652,8 +699,8 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
     <h3 id="confirmTitle">请确认</h3>
     <div id="confirmBody" style="margin:10px 0 18px; white-space:pre-wrap; line-height:1.75"></div>
     <div class="row" style="justify-content:flex-end">
-      <button class="btn soft" id="confirmCancel">取消（Esc）</button>
-      <button class="btn" id="confirmOk">确定（Enter）</button>
+      <button class="btn soft" id="confirmCancel">取消</button>
+      <button class="btn" id="confirmOk">确定</button>
     </div>
   </div>
 </div>
@@ -681,8 +728,8 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
       <input type="text" id="aiModelInput" placeholder="deepseek-chat">
     </div>
     <div class="row" style="justify-content:flex-end; margin-top:16px">
-      <button class="btn soft" id="btnAiCancel">取消（Esc）</button>
-      <button class="btn" id="btnAiSave">保存（Enter）</button>
+      <button class="btn soft" id="btnAiCancel">取消<span class="kbd-hint">（Esc）</span></button>
+      <button class="btn" id="btnAiSave">保存<span class="kbd-hint">（Enter）</span></button>
     </div>
   </div>
 </div>
@@ -3099,8 +3146,13 @@ function showConfirm(o){
     confirmResolver = resolve;
     $('#confirmTitle').textContent = o.title || '请确认';
     $('#confirmBody').textContent = o.message || '';
-    $('#confirmOk').textContent = o.okText || '确定（Enter）';
-    $('#confirmCancel').textContent = o.cancelText || '取消（Esc）';
+    // 确认框按钮：桌面显示按键提示，手机（紧凑模式）由 CSS 隐藏——手机上没有 Enter/Esc。
+    // 这里先把调用方文案里自带的（Enter）/（Esc）剥掉，避免重复显示。
+    const strip = function(s){
+      return String(s || '').replace(/[（(]\s*(Enter|Esc)\s*[）)]/gi, '').trim();
+    };
+    $('#confirmOk').innerHTML = esc(strip(o.okText) || '确定') + '<span class="kbd-hint">（Enter）</span>';
+    $('#confirmCancel').innerHTML = esc(strip(o.cancelText) || '取消') + '<span class="kbd-hint">（Esc）</span>';
     $('#confirmOk').className = 'btn' + (o.danger ? ' danger' : '');
     $('#confirmModal').classList.remove('hidden');
     $('#confirmOk').focus();                 // 直接回车即可确认
@@ -3351,7 +3403,8 @@ function toggleFilters(force){
   const show = (force === undefined) ? box.classList.contains('hidden') : !!force;
   box.classList.toggle('hidden', !show);
   const btn = $('#btnToggleFilters');
-  if(btn) btn.textContent = show ? '收起设置（T）' : '筛选设置（T）';
+  // 用 innerHTML 保留快捷键提示的 span（窄屏下由 CSS 隐藏）
+  if(btn) btn.innerHTML = (show ? '收起设置' : '筛选设置') + '<span class="kbd-hint">（T）</span>';
 }
 
 /**
@@ -3524,24 +3577,33 @@ function renderPracticeSummary(pr, total){
  * 把提交、翻页、收藏等高频操作固定在视口底部，切题与提交都不需要滚动页面；
  * 多选题未确认时，这里会出现“确认答案”按钮（与空格键等价）。
  */
+/**
+ * 是否处于「紧凑模式」：窄屏（手机竖屏、平板）或矮屏（手机横屏、窗口压扁）。
+ * 必须与 CSS 的媒体查询条件保持一致：@media (max-width:820px), (max-height:520px)
+ * 紧凑模式下操作条用短文案、按钮等分宽度，并去掉键盘相关提示。
+ */
+function isNarrow(){ return window.innerWidth <= 820 || window.innerHeight <= 520; }
+
 function renderPracticeActionBar(q, pr, total, doneN, okN){
+  const narrow = isNarrow();          // 手机上按钮要少而短，否则会被挤到需要横向滑动
   const pendingLen = (pr.pending[q.id] || []).length;
   const needConfirm = q.type === 'multi' && !pr.answered[q.id] && !pr.rote && pendingLen > 0;
   const answered = !!(pr.answered[q.id] || pr.rote);
   $('#actionBar').innerHTML =
     '<div class="inner">' +
-      '<div class="info" data-act="jump-hint" title="点这里或按 G 跳到指定题号">第 ' + (pr.idx + 1) + ' / ' + total +
-        ' 题<br>本次对 ' + okN + ' / ' + doneN + '</div>' +
-      '<button class="btn sm soft" data-act="prev" title="上一题（← 或 ↑）">← 上一题</button>' +
+      '<div class="info" data-act="jump-hint" title="第 ' + (pr.idx + 1) + ' / ' + total +
+        ' 题，本次对 ' + okN + ' / ' + doneN + '">' + (narrow ? '' : '第 ') + (pr.idx + 1) + '/' + total + (narrow ? '' : ' 题') +
+        (narrow ? '' : '<br>本次对 ' + okN + ' / ' + doneN) + '</div>' +
+      '<button class="btn sm soft" data-act="prev" title="上一题（← 或 ↑）">' + (narrow ? '上一题' : '← 上一题') + '</button>' +
       (needConfirm ? '<button class="btn sm" data-act="confirm" title="提交多选题答案（空格或 Enter）">确认答案</button>' : '') +
-      '<button class="btn sm" data-act="next" title="下一题（空格 / Enter / →）">下一题 →</button>' +
-      (answered ? '<button class="btn sm soft" data-act="toggle-explain">' +
+      '<button class="btn sm" data-act="next" title="下一题（空格 / Enter / →）">' + (narrow ? '下一题' : '下一题 →') + '</button>' +
+      (answered ? '<button class="btn sm soft" data-act="toggle-explain" title="收起或展开解析（P）">' +
         (explainCollapsed[q.id] ? '展开解析' : '收起解析') + '</button>' : '') +
       '<button class="btn sm soft" data-act="toggle-note" title="记录笔记（N）">' +
         (noteOpen[q.id] ? '收起笔记' : '笔记') + '</button>' +
       '<button class="btn sm soft" data-act="fav" title="收藏本题（F）">' +
-        (state.fav[q.id] ? '★ 已收藏' : '☆ 收藏') + '</button>' +
-      '<button class="btn sm soft" data-act="help" title="查看全部快捷键（?）">快捷键 ?</button>' +
+        (state.fav[q.id] ? (narrow ? '★已收藏' : '★ 已收藏') : (narrow ? '☆收藏' : '☆ 收藏')) + '</button>' +
+      (narrow ? '' : '<button class="btn sm soft" data-act="help" title="查看全部快捷键（?）">快捷键 ?</button>') +
     '</div>';
 }
 
@@ -3661,7 +3723,7 @@ function renderExamStart(){
     '<div class="muted small">随机抽取 <b>' + EXAM_COUNT + '</b> 题（按各模块题量占比分配），限时 <b>' + EXAM_MINUTES +
     '</b> 分钟，满分 <b>' + EXAM_COUNT + '</b> 分（每题 1 分），<b>' + EXAM_PASS + '</b> 分及格。' +
     '剩余 10 分钟倒计时变红提醒，时间到自动交卷；答题卡可查看已答 / 未答 / 标记状态并跳转。</div>' +
-    '<div class="small muted" style="margin-top:6px">键盘作答：' +
+    '<div class="small muted kbd-only" style="margin-top:6px">键盘作答：' +
     '<kbd>1</kbd>~<kbd>4</kbd> 或 <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 选项 · ' +
     '<kbd>空格</kbd> 下一题 · <kbd>←</kbd><kbd>→</kbd> 翻页 · <kbd>M</kbd> 标记 · <kbd>S</kbd> 交卷 · ' +
     '按 <kbd>Enter</kbd> 或 <kbd>空格</kbd> 直接开始；按 <kbd>?</kbd> 查看全部快捷键</div>';
@@ -3700,10 +3762,11 @@ function renderExamRun(){
 
   $('#examQuestionCard').innerHTML = questionCardHTML(q, {
     selected:selected, judged:false, showAnswerOnly:false, actions:false,
-    header:'<button class="btn sm soft" data-act="mark">' + (e.marked[qid] ? '取消标记' : '标记') + '</button>'
+    header:'<button class="btn sm soft desktop-only" data-act="mark">' +
+      (e.marked[qid] ? '取消标记' : '标记') + '</button>'
   }) + '<div class="row" style="margin-top:12px">' +
-        '<button class="btn soft" data-act="prev">← 上一题</button>' +
-        '<button class="btn" data-act="next">下一题 →</button>' +
+        '<button class="btn soft desktop-only" data-act="prev">← 上一题</button>' +
+        '<button class="btn desktop-only" data-act="next">下一题 →</button>' +
       '</div>';
 
   $('#examSheet').innerHTML = e.qids.map(function(id, i){
@@ -3724,12 +3787,15 @@ function renderExamActionBar(){
   const e = examRun;
   if(!e) return;
   const qid = e.qids[e.index];
+  const narrow = isNarrow();
   $('#actionBar').innerHTML =
     '<div class="inner">' +
-      '<div class="info">第 ' + (e.index + 1) + ' / ' + e.qids.length +
-        ' 题<br>已答 ' + Object.keys(e.answers).length + '</div>' +
-      '<button class="btn sm soft" data-act="prev" title="上一题（← 或 ↑）">← 上一题</button>' +
-      '<button class="btn sm" data-act="next" title="下一题（空格 / Enter / →）">下一题 →</button>' +
+      '<div class="info" title="第 ' + (e.index + 1) + ' / ' + e.qids.length +
+        ' 题，已答 ' + Object.keys(e.answers).length + '">' +
+        (narrow ? '' : '第 ') + (e.index + 1) + '/' + e.qids.length + (narrow ? '' : ' 题') +
+        (narrow ? '' : '<br>已答 ' + Object.keys(e.answers).length) + '</div>' +
+      '<button class="btn sm soft" data-act="prev" title="上一题（← 或 ↑）">' + (narrow ? '上一题' : '← 上一题') + '</button>' +
+      '<button class="btn sm" data-act="next" title="下一题（空格 / Enter / →）">' + (narrow ? '下一题' : '下一题 →') + '</button>' +
       '<button class="btn sm soft" data-act="mark" title="标记本题（M）">' +
         (e.marked[qid] ? '取消标记' : '标记本题') + '</button>' +
       '<button class="btn sm danger" data-act="submit-exam" title="交卷（S）">交卷</button>' +
@@ -4558,6 +4624,16 @@ function bindEvents(){
   });
 
   /* 练习工具条 */
+  /* 窗口尺寸变化（手机横竖屏切换、桌面缩放）时重绘一次，
+     让底部操作条的文案与尺寸跟随断点切换（窄屏用短文案、去掉键盘提示）。 */
+  let resizeTimer = null;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      if(currentView === 'practice' || currentView === 'exam') render();
+    }, 200);
+  });
+
   $('#selMode').addEventListener('change', function(){
     const mode = this.value;
     const mod = mode === 'module' ? ($('#selModule').value || MODULES[0]) : $('#selModule').value;
