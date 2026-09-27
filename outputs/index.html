@@ -3467,6 +3467,7 @@ function aiBlockHTML(q){
 
 const GH_API = 'https://api.github.com';
 const SYNC_FILE = 'sa-exam-progress.json';
+const SYNC_DESC = '软考系统分析师刷题系统 · 学习记录同步（自动生成）';
 
 /** 打包需要同步的数据（只含学习记录，不含任何密钥） */
 function packSyncPayload(){
@@ -3591,6 +3592,21 @@ async function ghApi(path, options){
 }
 
 /** 读取云端数据（未配置 Gist 或文件为空时返回 null） */
+/**
+ * 查找账号下已存在的同步 Gist。
+ * 作用：第二台设备首次同步时自动复用它，避免每台设备各建一个 Gist 导致数据分家
+ * （这是"手机刷了题、电脑看不到"最常见的原因）。
+ */
+async function findExistingSyncGist(){
+  try{
+    const list = await ghApi('/gists?per_page=100');
+    const hit = (list || []).find(function(g){ return g && g.description === SYNC_DESC; });
+    return hit ? hit.id : '';
+  }catch(e){
+    return '';        // 查找失败不影响后续"创建新 Gist"的流程
+  }
+}
+
 async function fetchCloudPayload(){
   if(!state.sync.gistId) return null;
   const gist = await ghApi('/gists/' + state.sync.gistId);
@@ -3607,7 +3623,7 @@ async function pushCloudPayload(payload){
     const gist = await ghApi('/gists', {
       method:'POST',
       body: JSON.stringify({
-        description: '软考系统分析师刷题系统 · 学习记录同步（自动生成）',
+        description: SYNC_DESC,
         public: false,
         files: files
       })
@@ -3657,13 +3673,23 @@ async function syncNow(silent){
   }
   try{
     if(!silent) toast('正在同步…');
+    // 本机还没有 Gist ID 时，先找账号下已存在的同步 Gist 并复用它，
+    // 避免手机和电脑各建一个 Gist、数据永远合不到一起
+    if(!cfg.gistId){
+      const found = await findExistingSyncGist();
+      if(found){ cfg.gistId = found; save(); }
+    }
     const remote = await fetchCloudPayload();
+    const cloudCount = (remote && remote.data && remote.data.records)
+      ? Object.keys(remote.data.records).length : 0;
     const merged = mergeSyncPayload(remote);
     await pushCloudPayload(packSyncPayload());
     cfg.lastSync = Date.now();
     save(); render();
     renderSyncInfo();          // 设置弹窗开着时同步刷新状态行
-    toast('同步完成' + (merged.changed ? '：从云端合并 ' + merged.changed + ' 项' : '：云端与本机已一致'), 'ok');
+    const localCount = Object.keys(state.records).length;
+    toast('同步完成：云端 ' + cloudCount + ' 题 → 合并后本机 ' + localCount + ' 题' +
+      (merged.changed ? '（合并 ' + merged.changed + ' 项）' : ''), 'ok');
     return true;
   }catch(e){
     console.warn(e);
