@@ -359,9 +359,19 @@ body.has-actionbar #practiceCard{scroll-margin-top:8px}               /* 一屏�
   .kbd-hint,.kbd-only{display:none}
   /* 触屏下把主要操作按钮一并放大到 44px 左右 */
   .ai-box .btn{min-height:44px; padding:10px 14px; font-size:14px}
+  #practiceCard .note-box .btn{min-height:44px; padding:10px 14px; font-size:14px}
+  /* 练习工具条按钮也按 44px 触控标准（仍保持紧凑字号，避免多占行） */
+  #practiceToolbar .btn{min-height:44px; padding:10px 9px; font-size:13px}
   .appbar-top .iconbtn{min-height:36px; padding:8px 10px}
   #confirmModal .modal .btn{min-height:44px; padding:11px 16px}
   #examStartPanel .btn{min-height:44px; padding:11px 16px; font-size:15px}
+  /* 列表页与功能页（错题本/收藏/搜索/案例/统计）的按钮同样按 44px 触控标准放大。
+     不含练习工具条——那里按钮要紧凑，才能让题目一屏放下。 */
+  #wrongList .btn, #favList .btn, #searchList .btn, #caseList .btn,
+  #view-wrong .card .btn, #view-fav .card .btn, #view-search .card .btn,
+  #view-case .card .btn, #view-stats .card .btn{
+    min-height:44px; padding:10px 13px; font-size:14px;
+  }
   /* 提示条上移，避免盖住底部操作条 */
   .toast{bottom:84px}
   /* 考试页在手机上只保留底部操作条，隐藏重复的入口 */
