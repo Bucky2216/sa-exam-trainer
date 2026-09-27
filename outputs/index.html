@@ -128,6 +128,8 @@ header.appbar{
   border-radius:8px; padding:6px 10px; line-height:1.2; transition:.15s;
 }
 .iconbtn:hover{background:rgba(255,255,255,.28)}
+/* 顶栏「同步」按钮做得比邻居更醒目，方便一眼找到跨端同步入口 */
+#btnSyncTop{background:rgba(255,255,255,.28); border-color:rgba(255,255,255,.55); font-weight:700}
 nav.tabs{
   display:flex; gap:4px; overflow-x:auto; padding:0 12px 8px;
   max-width:1180px; margin:0 auto; scrollbar-width:none;
@@ -460,7 +462,8 @@ kbd{
   .brand{font-size:15px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .brand small{display:none}
   .appbar-top{padding:8px 12px; gap:8px}
-  .iconbtn{padding:6px 9px; font-size:13px}
+  /* 顶栏按钮在窄屏收紧，避免文字被挤成竖排 */
+  .iconbtn{padding:6px 7px; font-size:12px; white-space:nowrap; flex:0 0 auto}
   nav.tabs{padding:0 8px 8px}
   .tab{padding:7px 11px; font-size:14px}
   main{padding:12px 12px 60px}
@@ -480,6 +483,7 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
   <div class="appbar-top">
     <div class="brand">软考高级 · 系统分析师<small>离线刷题系统</small></div>
     <div class="spacer"></div>
+    <button class="iconbtn" id="btnSyncTop" title="跨端同步：手机与电脑的进度互通">同步</button>
     <button class="iconbtn" id="btnImport" title="导入题库或学习记录 JSON">导入</button>
     <button class="iconbtn" id="btnExport" title="导出题库 + 学习记录 JSON">导出</button>
     <button class="iconbtn" id="btnTheme" title="切换深色 / 浅色模式">深色</button>
@@ -4954,6 +4958,7 @@ function bindEvents(){
     if(t.closest('#btnImport') || t.closest('#btnImport2')){ $('#fileInput').click(); return; }
     /* —— 跨端同步 —— */
     if(t.closest('#btnSync')){ openSyncSettings(); return; }
+    if(t.closest('#btnSyncTop')){ openSyncSettings(); return; }
     if(t.closest('#btnSyncSave')){ saveSyncSettings(); return; }
     if(t.closest('#btnSyncNow')){ syncNow(false); return; }
     if(t.closest('#btnSyncOverwrite')){ syncOverwrite(); return; }
