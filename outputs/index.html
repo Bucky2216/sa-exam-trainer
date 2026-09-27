@@ -282,6 +282,15 @@ pre.code{background:var(--card-2); border:1px solid var(--border); border-radius
 .toast.err{background:var(--err)}
 .toast.ok{background:var(--ok)}
 
+/* ============================ 引导横幅（同步提示等） ============================ */
+.banner{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  background:var(--primary-soft); border:1px solid var(--border);
+  border-left:4px solid var(--primary); border-radius:10px;
+  padding:10px 12px; font-size:13px; color:var(--text); margin-bottom:10px;
+}
+.banner .grow{flex:1; min-width:180px; line-height:1.6}
+
 /* ============================ 右侧常驻操作条 + 一屏作答 ============================ */
 /* 上一题 / 下一题 / 确认答案 / 收藏 / 解析 / 笔记等高频操作竖排在屏幕右侧固定，
    视线与鼠标都不用来回移动，切题与提交都不需要滚动页面。
@@ -359,6 +368,10 @@ body.has-actionbar #practiceCard{scroll-margin-top:8px}               /* 一屏�
   .kbd-hint,.kbd-only{display:none}
   /* 触屏下把主要操作按钮一并放大到 44px 左右 */
   .ai-box .btn{min-height:44px; padding:10px 14px; font-size:14px}
+  .banner .btn{min-height:44px; padding:10px 14px; font-size:13px}
+  /* 文案独占一行、两个按钮并排，避免在小屏上把横幅拉得太高 */
+  .banner{padding:9px 11px; gap:8px}
+  .banner .grow{min-width:100%; font-size:12.5px}
   #practiceCard .note-box .btn{min-height:44px; padding:10px 14px; font-size:14px}
   /* 练习工具条按钮也按 44px 触控标准（仍保持紧凑字号，避免多占行） */
   #practiceToolbar .btn{min-height:44px; padding:10px 9px; font-size:13px}
@@ -495,6 +508,8 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
 <main>
   <!-- ================= 视图 1：练习 ================= -->
   <section class="view active" id="view-practice">
+    <!-- 引导横幅：答过题但还没配置云同步时，这里会提示一次（可关掉，不再打扰） -->
+    <div id="syncBanner" class="hidden"></div>
     <div class="card" id="practiceToolbar">
       <div class="row" style="justify-content:space-between">
         <div class="row" style="gap:10px">
@@ -2989,7 +3004,7 @@ function defaultState(){
     ai:{ key:'', base:'https://api.deepseek.com', model:'deepseek-flash', thinking:false },
     // 跨端同步配置（存在你的 GitHub 账号下的 secret Gist 里；Token 仅本机保存，不参与同步）
     // auto 默认开启：配好一次后就是"打开即合并、答题后自动上传"，不需要手动点同步
-    sync:{ token:'', gistId:'', auto:true, lastSync:0 },
+    sync:{ token:'', gistId:'', auto:true, lastSync:0, bannerDismissed:false },
     aiExplain:{},         // AI 生成的解析：{ qid: text }
     examDraft:null,       // 未完成的考试草稿
     examHistory:[]        // 历史考试成绩
@@ -3685,6 +3700,27 @@ function scheduleAutoSync(){
 /* ------------------------- 跨端同步：设置界面 ------------------------- */
 
 /** 渲染同步设置里的状态说明（本机记录概况 / Gist / 上次同步时间） */
+/**
+ * 练习页顶部的引导横幅。
+ * 触发条件：已经答过题（说明确实产生了需要保存的记录）、还没配同步、且用户没有关掉过提示。
+ * 这样新用户不会被打扰，而一旦有了数据就会看到入口。
+ */
+function renderSyncBanner(){
+  const box = $('#syncBanner');
+  if(!box) return;
+  const cfg = state.sync || {};
+  const hasData = Object.keys(state.records).length > 0;
+  const show = hasData && !cfg.token && !cfg.bannerDismissed;
+  box.classList.toggle('hidden', !show);
+  if(!show){ box.innerHTML = ''; return; }
+  box.innerHTML =
+    '<div class="banner">' +
+      '<span class="grow">📱 手机和电脑的进度、错题、笔记想互通？配置一次云同步即可（免费，数据只存你自己的 GitHub 账号）。</span>' +
+      '<button class="btn sm" data-act="sync-open">立即配置</button>' +
+      '<button class="btn sm soft" data-act="sync-dismiss">不再提示</button>' +
+    '</div>';
+}
+
 function renderSyncInfo(){
   const box = $('#syncInfoBox');
   if(!box) return;
@@ -3915,6 +3951,7 @@ function renderPractice(){
   card.innerHTML = questionCardHTML(q, {
     selected:selected, judged:judged, showAnswerOnly:!!pr.rote, aiBlock:true
   });
+  renderSyncBanner();
   $('#inpJump').value = pr.idx + 1;
   renderPracticeSummary(pr, total);
   renderPracticeActionBar(q, pr, total, doneIds.length, okN);
@@ -4842,6 +4879,13 @@ function handleAct(el){
     }
     case 'submit-exam': submitExam(false); break;
     case 'help': toggleHelp(true); break;
+    /* —— 引导横幅 —— */
+    case 'sync-open': openSyncSettings(); break;
+    case 'sync-dismiss':
+      state.sync.bannerDismissed = true;
+      save(); render();
+      toast('已关闭提示，之后可在「统计」页的「云同步」里配置');
+      break;
   }
 }
 
