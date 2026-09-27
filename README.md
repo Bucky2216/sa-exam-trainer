@@ -96,7 +96,7 @@ https://<你的用户名>.github.io/<仓库名>/
 ```bash
 cd /Users/bunny/project/sa-exam-trainer
 # 改完 outputs/index.html 之后执行
-python3 work/upload_via_api.py outputs/index.html
+python3 tools/upload_via_api.py outputs/index.html
 ```
 
 脚本会自动取远程文件的 sha 再提交（可重复运行做覆盖更新），推送后约 30 秒 Pages 生效。
