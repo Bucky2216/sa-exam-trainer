@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  每天 00:00 自动把本地改动同步到 GitHub（由 tools/publish.py 执行）。
+  安装（复制到用户级 LaunchAgents 并加载）：
+    cp tools/com.bunny.sa-exam-trainer.publish.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.bunny.sa-exam-trainer.publish.plist
+  手动立刻跑一次：
+    launchctl kickstart -k gui/$(id -u)/com.bunny.sa-exam-trainer.publish
+  查看是否已注册：
+    launchctl list | grep sa-exam
+  停用：
+    launchctl bootout gui/$(id -u)/com.bunny.sa-exam-trainer.publish
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.bunny.sa-exam-trainer.publish</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/bunny/project/sa-exam-trainer/tools/publish.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/bunny/project/sa-exam-trainer</string>
+
+  <!-- 本地时间每天 00:00 触发；Mac 处于睡眠时错过的任务会在唤醒后补跑一次 -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>0</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/bunny/project/sa-exam-trainer/work/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/bunny/project/sa-exam-trainer/work/launchd.err.log</string>
+
+  <!-- 开机/加载时不立即执行，只在每天 00:00 跑 -->
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
