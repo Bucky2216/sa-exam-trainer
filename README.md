@@ -1,5 +1,12 @@
 # 软考高级 · 系统分析师 刷题系统
 
+## 在线地址（已部署）
+
+**https://bucky2216.github.io/sa-exam-trainer/**
+
+GitHub Pages 静态托管，手机、公司电脑打开即用（实测首字节 0.6~0.8 秒，整页加载约 1 秒）。
+仓库地址：https://github.com/Bucky2216/sa-exam-trainer
+
 纯前端、单文件、可离线的刷题网页。整个应用就是一个 HTML 文件：
 
 ```
@@ -78,6 +85,36 @@ https://<你的用户名>.github.io/<仓库名>/
 - Key 只保存在本机 localStorage，除发给 DeepSeek 官方接口外不流向别处。
 - 每位使用者填自己的 Key 即可；若想由站点统一提供 Key，则必须自建后端代理，
   否则 Key 会暴露在前端页面里。
+
+## 如何更新线上版本
+
+本机当前网络环境下 **git 传输通道（`github.com/<仓库>.git`）被阻断**（实测多个 IP 都超时），
+但 **`api.github.com` 正常**，因此有两条更新路径：
+
+**方式 A：API 通道（当前网络可直接用）**
+
+```bash
+cd /Users/bunny/project/sa-exam-trainer
+# 改完 outputs/index.html 之后执行
+python3 work/upload_via_api.py outputs/index.html
+```
+
+脚本会自动取远程文件的 sha 再提交（可重复运行做覆盖更新），推送后约 30 秒 Pages 生效。
+
+**方式 B：标准 git 流程（需能访问 github.com 的 git 通道，例如挂代理）**
+
+```bash
+cd /Users/bunny/project/sa-exam-trainer
+git add -A && git commit -m "update: 题库调整"
+git push
+```
+
+> ⚠️ 首次上线时因为 git 通道不通，代码是用 API 逐个文件提交的，所以**本地提交历史与远程不一致**。
+> 以后切回方式 B 之前，先对齐一次（本地文件内容和远程相同，不会丢内容）：
+>
+> ```bash
+> git fetch origin && git reset --hard origin/main
+> ```
 
 ## 题库扩充
 
