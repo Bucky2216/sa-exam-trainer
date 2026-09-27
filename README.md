@@ -116,6 +116,31 @@ git push
 > git fetch origin && git reset --hard origin/main
 > ```
 
+## 每天 00:00 自动同步（已配置）
+
+本机已注册 launchd 定时任务 **`com.bunny.sa-exam-trainer.publish`**：
+
+- **触发时间**：每天本地时间 00:00（Mac 睡眠时错过的会在唤醒后补跑一次）
+- **做什么**：`tools/publish.py` 比对本地文件与远程文件的 sha，**只上传有改动的文件**；
+  当天没改动就直接跳过，不会产生空提交
+- **日志**：`work/publish.log`（同步记录）、`work/launchd.err.log`（异常输出）
+- **前提**：`gh` 保持登录状态（token 存在系统钥匙串）。若日志出现「gh 未登录或不可用」，
+  在终端执行一次 `gh auth login` 即可恢复
+
+常用命令：
+
+```bash
+cd /Users/bunny/project/sa-exam-trainer
+
+launchctl kickstart -k gui/$(id -u)/com.bunny.sa-exam-trainer.publish   # 立刻手动跑一次
+launchctl list | grep sa-exam                                            # 查看是否已注册
+tail -20 work/publish.log                                                # 查看同步记录
+
+# 停用 / 重新启用
+launchctl bootout gui/$(id -u)/com.bunny.sa-exam-trainer.publish
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.bunny.sa-exam-trainer.publish.plist
+```
+
 ## 题库扩充
 
 在 `outputs/index.html` 里找到 `QUESTION_BANK` / `CASE_BANK` 数组，按同样结构追加对象即可
