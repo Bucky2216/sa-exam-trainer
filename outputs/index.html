@@ -714,6 +714,9 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
       <label>Gist ID（留空即可，首次同步会自动创建）</label>
       <input type="text" id="syncGistInput" placeholder="留空自动创建；另一台设备把这串 ID 填进来即可" spellcheck="false">
     </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm soft" id="btnSyncCopyCode">复制同步码（含 Token，给另一台设备用）</button>
+    </div>
     <label class="switch" style="margin-top:10px">
       <input type="checkbox" id="syncAutoInput">
       自动同步（打开页面时合并一次，答题后 20 秒再合并一次）
@@ -2985,7 +2988,8 @@ function defaultState(){
     // thinking 默认关闭：思考模式会额外产生思维链 token（按输出价计费），解析任务不需要。
     ai:{ key:'', base:'https://api.deepseek.com', model:'deepseek-flash', thinking:false },
     // 跨端同步配置（存在你的 GitHub 账号下的 secret Gist 里；Token 仅本机保存，不参与同步）
-    sync:{ token:'', gistId:'', auto:false, lastSync:0 },
+    // auto 默认开启：配好一次后就是"打开即合并、答题后自动上传"，不需要手动点同步
+    sync:{ token:'', gistId:'', auto:true, lastSync:0 },
     aiExplain:{},         // AI 生成的解析：{ qid: text }
     examDraft:null,       // 未完成的考试草稿
     examHistory:[]        // 历史考试成绩
@@ -3522,6 +3526,27 @@ function mergeSyncPayload(remote){
 }
 
 /** 调用 GitHub API（统一错误提示） */
+/**
+ * 生成「同步码」：把 Token 与 Gist ID 打包成一串文本，
+ * 在另一台设备粘贴这一串就能一次完成配置（省得分别复制两个字段）。
+ * 注意：同步码等价于凭据，只在自己的设备之间传，别发到公开场合。
+ */
+function makeSyncCode(){
+  try{
+    return 'sat1:' + btoa(JSON.stringify({ t: state.sync.token, g: state.sync.gistId }));
+  }catch(e){ return ''; }
+}
+
+/** 解析同步码（不是同步码就返回 null） */
+function tryParseSyncCode(str){
+  const s = String(str || '').trim();
+  if(!/^sat1:/i.test(s)) return null;
+  try{
+    const j = JSON.parse(atob(s.slice(5)));
+    return (j && (j.t || j.g)) ? { token: j.t || '', gistId: j.g || '' } : null;
+  }catch(e){ return null; }
+}
+
 async function ghApi(path, options){
   const opts = Object.assign({ method:'GET' }, options || {});
   opts.headers = Object.assign({
@@ -3589,9 +3614,18 @@ async function pushCloudPayload(payload){
  */
 function collectSyncForm(){
   if(!isSyncModalOpen()) return;
-  const token = $('#syncTokenInput').value.trim();
-  if(token) state.sync.token = token;
-  state.sync.gistId = $('#syncGistInput').value.trim();
+  let token = $('#syncTokenInput').value.trim();
+  let gistId = $('#syncGistInput').value.trim();
+  // 支持直接粘贴同步码（一个框同时带入 Token 与 Gist ID）
+  const code = tryParseSyncCode(token) || tryParseSyncCode(gistId);
+  if(code){
+    token = code.token || token;
+    gistId = code.gistId || gistId;
+    $('#syncTokenInput').value = token;
+    $('#syncGistInput').value = gistId;
+  }
+  state.sync.token = token;          // 允许清空：用户解除同步时直接删掉 Token 即可
+  state.sync.gistId = gistId;
   state.sync.auto = $('#syncAutoInput').checked;
   save();
 }
@@ -3681,14 +3715,11 @@ function isSyncModalOpen(){ return !$('#syncModal').classList.contains('hidden')
 
 /** 保存同步配置（Token 与 Gist ID 只写本机 localStorage） */
 function saveSyncSettings(){
-  state.sync.token = $('#syncTokenInput').value.trim();
-  state.sync.gistId = $('#syncGistInput').value.trim();
-  state.sync.auto = $('#syncAutoInput').checked;
-  save();
+  collectSyncForm();                 // 统一处理输入与同步码粘贴
   closeSyncSettings();
-  toast('同步设置已保存到本机', 'ok');
-  // 刚打开自动同步时，立刻同步一次（不打扰用户，失败也会在弹窗里看到下次状态）
-  if(state.sync.auto && state.sync.token) syncNow(true);
+  toast('同步设置已保存到本机' + (state.sync.auto ? '（已开启自动同步）' : ''), 'ok');
+  // 保存后立刻同步一次，用户不用再手动点「立即同步」
+  if(state.sync.token) syncNow(true);
 }
 
 /** 打开 AI 设置弹窗并回填当前配置 */
@@ -4854,6 +4885,14 @@ function bindEvents(){
     if(t.closest('#btnSyncNow')){ syncNow(false); return; }
     if(t.closest('#btnSyncOverwrite')){ syncOverwrite(); return; }
     if(t.closest('#btnSyncCancel')){ closeSyncSettings(); return; }
+    if(t.closest('#btnSyncCopyCode')){
+      collectSyncForm();                       // 先把当前输入收集进来，避免复制到旧值
+      if(!state.sync.token){ toast('请先填写 GitHub Token', 'err'); return; }
+      const code = makeSyncCode();
+      if(!code){ toast('生成同步码失败', 'err'); return; }
+      copyText(code, '同步码已复制：在另一台设备的「云同步」里粘贴到 Token 框即可');
+      return;
+    }
     if(t.closest('#btnExport') || t.closest('#btnExport2')){ exportAll(); return; }
     if(t.closest('#btnExportRecords')){ exportRecords(); return; }
     if(t.closest('#btnClearRecords')){
