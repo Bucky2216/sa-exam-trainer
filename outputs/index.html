@@ -3011,7 +3011,8 @@ function defaultState(){
     ai:{ key:'', base:'https://api.deepseek.com', model:'deepseek-flash', thinking:false },
     // 跨端同步配置（存在你的 GitHub 账号下的 secret Gist 里；Token 仅本机保存，不参与同步）
     // auto 默认开启：配好一次后就是"打开即合并、答题后自动上传"，不需要手动点同步
-    sync:{ token:'', gistId:'', auto:true, lastSync:0, bannerDismissed:false },
+    // dirty 表示"本机有尚未上传的改动"，用于页面切到后台/关闭前补一次同步
+    sync:{ token:'', gistId:'', auto:true, lastSync:0, bannerDismissed:false, dirty:false },
     aiExplain:{},         // AI 生成的解析：{ qid: text }
     examDraft:null,       // 未完成的考试草稿
     examHistory:[]        // 历史考试成绩
@@ -3091,6 +3092,7 @@ function recordResult(qid, correct){
   }
 
   scheduleAutoSync();     // 开启自动同步时，答题后延迟 20 秒会把记录同步到云端
+  if(state.sync) state.sync.dirty = true;   // 标记有未上传的改动（切后台/关页面前会补一次同步）
 }
 
 /** 累计答题次数（含重复作答） */
@@ -3689,6 +3691,7 @@ async function syncNow(silent){
     const merged = mergeSyncPayload(remote);
     await pushCloudPayload(packSyncPayload());
     cfg.lastSync = Date.now();
+    cfg.dirty = false;         // 已上传，清除待同步标记
     save(); render();
     renderSyncInfo();          // 设置弹窗开着时同步刷新状态行
     const localCount = Object.keys(state.records).length;
@@ -3722,12 +3725,12 @@ function syncOverwrite(){
   });
 }
 
-/* 自动同步：答题后延迟 20 秒合并一次，避免频繁请求 */
+/* 自动同步：答题后延迟 8 秒合并一次（既避免频繁请求，又减少"关页面来不及上传"的窗口） */
 let autoSyncTimer = null;
 function scheduleAutoSync(){
   if(!state.sync.auto || !state.sync.token) return;
   clearTimeout(autoSyncTimer);
-  autoSyncTimer = setTimeout(function(){ syncNow(true); }, 20000);
+  autoSyncTimer = setTimeout(function(){ syncNow(true); }, 8000);
 }
 
 /* ------------------------- 跨端同步：设置界面 ------------------------- */
@@ -5092,6 +5095,14 @@ function bindEvents(){
   /* 练习工具条 */
   /* 窗口尺寸变化（手机横竖屏切换、桌面缩放）时重绘一次，
      让底部操作条的文案与尺寸跟随断点切换（窄屏用短文案、去掉键盘提示）。 */
+  /* 页面切到后台 / 关闭标签前：如果还有没上传的改动，立刻同步一次。
+     作用：避免"刷完题马上关页面"导致那批记录没来得及自动上传。 */
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) return;
+    const cfg = state.sync || {};
+    if(cfg.auto && cfg.token && cfg.dirty) syncNow(true);
+  });
+
   let resizeTimer = null;
   window.addEventListener('resize', function(){
     clearTimeout(resizeTimer);
