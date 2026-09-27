@@ -31,6 +31,7 @@ TRACKED = [
     ".gitignore",
     "tools/check.js",
     "tools/publish.py",
+    "tools/com.bunny.sa-exam-trainer.publish.plist",
     "tools/upload_via_api.py",
 ]
 
