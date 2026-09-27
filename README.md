@@ -7,6 +7,23 @@
 GitHub Pages 静态托管，手机、公司电脑打开即用（实测首字节 0.6~0.8 秒，整页加载约 1 秒）。
 仓库地址：https://github.com/Bucky2216/sa-exam-trainer
 
+## 常用命令速查
+
+以下命令都在项目目录 `/Users/bunny/project/sa-exam-trainer` 下执行：
+
+| 想做什么 | 命令 |
+|---|---|
+| 本地预览 | `python3 -m http.server 8000 --bind 127.0.0.1` → 浏览器打开 http://127.0.0.1:8000/ |
+| 校验题库（题量/答案/选项） | `node tools/check.js` |
+| **发布改动到线上** | `python3 tools/publish.py`（自动只传有改动的文件） |
+| 立刻跑一次每日同步 | `launchctl kickstart -k gui/$(id -u)/com.bunny.sa-exam-trainer.publish` |
+| 看同步日志 | `tail -20 work/publish.log` |
+| 定时任务是否还在 | `launchctl list \| grep sa-exam` |
+| 停用 / 启用定时同步 | `launchctl bootout gui/$(id -u)/com.bunny.sa-exam-trainer.publish` / `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.bunny.sa-exam-trainer.publish.plist` |
+| 看 gh 是否登录 | `gh auth status` |
+| 重新登录 gh | `gh auth login --hostname github.com --git-protocol https --web` |
+| 看线上站点状态 | `gh api repos/Bucky2216/sa-exam-trainer/pages --jq .status` |
+
 纯前端、单文件、可离线的刷题网页。整个应用就是一个 HTML 文件：
 
 ```
