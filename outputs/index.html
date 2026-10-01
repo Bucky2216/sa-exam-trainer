@@ -474,6 +474,15 @@ kbd{
 
 /* ============================ 底部 ============================ */
 footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--muted); font-size:12px; line-height:1.8}
+
+/* ============================ 移动端：取消解析框的内部滚动 ============================
+   手机上手指想滑动页面时，如果正好落在解析框上，滑动会被小框"接住"，
+   体验很差。这里取消高度限制，让解析内容跟随页面一起滚动
+   （底部操作条仍然固定在屏幕上，随时可以翻题）。
+   注意：必须放在样式表最后，才能覆盖前面同优先级的 .explain / .ai-text 定义。 */
+@media (max-width:820px), (max-height:520px){
+  .explain, .ai-text{max-height:none; overflow:visible}
+}
 </style>
 </head>
 <body>
