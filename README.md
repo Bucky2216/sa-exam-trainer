@@ -27,7 +27,7 @@ GitHub Pages 静态托管，手机、公司电脑打开即用（实测首字节 
 纯前端、单文件、可离线的刷题网页。整个应用就是一个 HTML 文件：
 
 ```
-outputs/index.html      ← 应用本体（200 道选择题 + 20 道案例题，内联 CSS/JS，无外部依赖）
+outputs/index.html      ← 应用本体（301 道选择题 + 25 道案例题，内联 CSS/JS，无外部依赖）
 index.html              ← 仓库首页跳转页，自动跳到上面的文件
 tools/check.js          ← 题库校验脚本（题量配比、id 唯一性、答案与选项一致性）
 work/                   ← 本地开发/备份目录，不参与部署，已在 .gitignore 中忽略
