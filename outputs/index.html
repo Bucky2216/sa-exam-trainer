@@ -531,6 +531,9 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 16px 40px; color:var(--mu
         </div>
         <div class="row">
           <label class="switch"><input type="checkbox" id="chkRote"> 背题模式</label>
+          <label class="switch" title="练习与模拟考优先安排没做过的题，避免反复遇到刚做过的题">
+            <input type="checkbox" id="chkPreferUnseen"> 优先未做过
+          </label>
           <button class="btn sm soft" id="btnToggleFilters" title="展开或收起筛选设置（快捷键 T）">筛选设置<span class="kbd-hint">（T）</span></button>
           <button class="btn sm soft" id="btnAiSetting" title="配置 DeepSeek API Key，用于生成考点解析">AI 设置</button>
           <button class="btn sm soft kbd-only" id="btnHelp" title="查看全部键盘快捷键（按 ? 也可打开）">快捷键 ?</button>
@@ -4752,6 +4755,8 @@ function defaultState(){
     caseNotes:{},         // 案例题笔记：{ caseId: text }
     caseOpen:{},          // 案例题展开状态（不持久化界面细节时可忽略）
     practice:{ mode:'seq', module:'', difficulty:'', idx:0, list:null, answered:{}, pending:{}, rote:false },
+    // 出题偏好：优先安排没做过的题（练习与模拟考都生效），避免反复遇到刚做过的题
+    settings:{ preferUnseen:true },
     // AI 考点解析配置（Key 仅存本机）。
     // 模型名说明：deepseek-chat / deepseek-reasoner 是旧名，已于 2026-07-24 停止服务，
     // 当前可用名为 deepseek-flash（DeepSeek-V4.1-Flash，最便宜）与 deepseek-v4-pro。
@@ -4774,6 +4779,7 @@ function loadState(){
     const base = defaultState();
     const merged = Object.assign(base, parsed);
     merged.practice = Object.assign(defaultState().practice, parsed.practice || {});
+    merged.settings = Object.assign(defaultState().settings, parsed.settings || {});
     // 兼容旧配置：把已停用的旧模型名自动升级为新模型名，避免用户点解析时报错
     if(merged.ai){
       if(/^deepseek-(chat|reasoner)$/i.test(String(merged.ai.model || '').trim())){
@@ -4824,6 +4830,7 @@ function recordResult(qid, correct){
   const rec = state.records[qid] || { seen:0, correct:0 };
   rec.seen += 1;
   if(correct) rec.correct += 1;
+  rec.lastTs = Date.now();        // 记录最近作答时间，用于"越久没做越优先"的排序
   state.records[qid] = rec;
 
   const dk = todayKey();
@@ -5686,8 +5693,44 @@ function buildPracticeList(mode, mod, diff){
   if(mode === 'difficulty' && diff) list = list.filter(q => String(q.difficulty) === String(diff));
   if(mode === 'wrong') list = list.filter(q => state.wrong[q.id]);
   if(mode === 'fav')   list = list.filter(q => state.fav[q.id]);
-  if(mode === 'random' || mode === 'wrong' || mode === 'fav') shuffle(list);
+  if(mode === 'wrong' || mode === 'fav'){
+    shuffle(list);                                  // 错题/收藏本本身范围小，直接打乱
+  }else if(mode === 'random'){
+    shuffle(list);
+    if(preferUnseen()) list = sortUnseenFirst(list, true);   // 未做过的题优先出现
+  }else if(preferUnseen()){
+    // 顺序 / 按模块 / 按难度：把没做过的题排在前面，做过的按"最久没做"排后面
+    list = sortUnseenFirst(list, false);
+  }
   return list.map(q => q.id);
+}
+
+/** 是否启用"优先未做过"的出题偏好（默认开启） */
+function preferUnseen(){
+  return !state.settings || state.settings.preferUnseen !== false;
+}
+
+/** 某题累计作答次数（未做过返回 0） */
+function doneTimes(qid){
+  const r = state.records[qid];
+  return r ? (r.seen || 0) : 0;
+}
+
+/**
+ * 把「没做过的题」排在前面，做过的题按最近作答时间由远到近排在后面。
+ * @param {Array} list 题目对象数组
+ * @param {boolean} shuffleUnseen 是否打乱未做过的部分（随机练习用 true）
+ */
+function sortUnseenFirst(list, shuffleUnseen){
+  const unseen = [], seen = [];
+  list.forEach(function(q){ (doneTimes(q.id) ? seen : unseen).push(q); });
+  if(shuffleUnseen) shuffle(unseen);
+  seen.sort(function(a, b){
+    const ta = (state.records[a.id] && state.records[a.id].lastTs) || 0;
+    const tb = (state.records[b.id] && state.records[b.id].lastTs) || 0;
+    return ta - tb;                                // 时间越早越靠前，即"越久没做越优先"
+  });
+  return unseen.concat(seen);
 }
 
 function ensurePracticeList(){
@@ -5726,6 +5769,7 @@ function renderPractice(){
   const pr = state.practice;
   const card = $('#practiceCard');
   $('#chkRote').checked = !!pr.rote;
+  $('#chkPreferUnseen').checked = preferUnseen();
   $('#selMode').value = pr.mode || 'seq';
   $('#selModule').value = pr.module || '';
   $('#selDifficulty').value = pr.difficulty || '';
@@ -5850,8 +5894,17 @@ function buildExamPaper(){
   }
   const picked = [];
   mods.forEach(function(m){
-    const pool = shuffle(byModule[m].slice());
-    picked.push.apply(picked, pool.slice(0, quotas[m]));
+    const pool = byModule[m].slice();
+    let ordered;
+    if(preferUnseen()){
+      // 优先抽该模块里没做过的题，不足时再用做过的题补齐（保持模块配比不变）
+      const unseen = pool.filter(q => !doneTimes(q.id));
+      const seen = pool.filter(q => doneTimes(q.id));
+      ordered = shuffle(unseen).concat(shuffle(seen));
+    }else{
+      ordered = shuffle(pool);
+    }
+    picked.push.apply(picked, ordered.slice(0, quotas[m]));
   });
   return shuffle(picked).map(q => q.id).slice(0, EXAM_COUNT);
 }
@@ -6889,6 +6942,13 @@ function bindEvents(){
   $('#chkRote').addEventListener('change', function(){
     state.practice.rote = this.checked; save(); renderPractice();
     toast(this.checked ? '已开启背题模式（直接显示答案与解析）' : '已关闭背题模式');
+  });
+  $('#chkPreferUnseen').addEventListener('change', function(){
+    state.settings.preferUnseen = this.checked;
+    save();
+    toast(this.checked
+      ? '已开启：出题优先安排没做过的题（点「重新开始」后按新策略重排）'
+      : '已关闭：按题库顺序 / 纯随机出题');
   });
   $('#selCaseModule').addEventListener('change', function(){ renderCaseView(); });
 
