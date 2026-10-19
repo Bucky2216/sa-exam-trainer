@@ -4765,7 +4765,7 @@ function defaultState(){
     // 跨端同步配置（存在你的 GitHub 账号下的 secret Gist 里；Token 仅本机保存，不参与同步）
     // auto 默认开启：配好一次后就是"打开即合并、答题后自动上传"，不需要手动点同步
     // dirty 表示"本机有尚未上传的改动"，用于页面切到后台/关闭前补一次同步
-    sync:{ token:'', gistId:'', auto:true, lastSync:0, bannerDismissed:false, dirty:false },
+    sync:{ token:'', gistId:'', auto:true, lastSync:0, bannerDismissed:false, dirty:false, pendingCount:0 },
     aiExplain:{},         // AI 生成的解析：{ qid: text }
     examDraft:null,       // 未完成的考试草稿
     examHistory:[]        // 历史考试成绩
@@ -4846,8 +4846,12 @@ function recordResult(qid, correct){
     state.wrong[qid] = w;
   }
 
-  scheduleAutoSync();     // 开启自动同步时，答题后延迟 20 秒会把记录同步到云端
-  if(state.sync) state.sync.dirty = true;   // 标记有未上传的改动（切后台/关页面前会补一次同步）
+  if(state.sync){
+    state.sync.dirty = true;                         // 有未上传改动（切后台/关页面前会补同步）
+    state.sync.pendingCount = (state.sync.pendingCount || 0) + 1;   // 累计待同步题数
+  }
+  // 注意：必须在 pendingCount 累加之后再调度，否则阈值判断会永远差 1 题
+  scheduleAutoSync();
 }
 
 /** 累计答题次数（含重复作答） */
@@ -5447,6 +5451,7 @@ async function syncNow(silent){
     await pushCloudPayload(packSyncPayload());
     cfg.lastSync = Date.now();
     cfg.dirty = false;         // 已上传，清除待同步标记
+    cfg.pendingCount = 0;      // 已上传，待同步题数清零
     save(); render();
     renderSyncInfo();          // 设置弹窗开着时同步刷新状态行
     const localCount = Object.keys(state.records).length;
@@ -5480,12 +5485,27 @@ function syncOverwrite(){
   });
 }
 
-/* 自动同步：答题后延迟 8 秒合并一次（既避免频繁请求，又减少"关页面来不及上传"的窗口） */
+/* 自动同步策略：
+   · 攒够 SYNC_MIN_QUESTIONS 道题 → 防抖 SYNC_DEBOUNCE_MS 后同步一次（避免每题都请求）
+   · 没攒够 → 最多等 SYNC_INTERVAL_MS 兜底同步一次（避免长时间不同步、丢数据）
+   · 页面切后台/关闭前 → 立即补一次（见 visibilitychange 监听）
+   三个参数都在这里，想更省请求可以把题数调大、间隔调长。 */
+const SYNC_MIN_QUESTIONS = 10;                 // 攒够多少道题触发同步
+const SYNC_INTERVAL_MS = 5 * 60 * 1000;        // 时间兜底：5 分钟
+const SYNC_DEBOUNCE_MS = 8000;                 // 达标后的防抖延迟
+
 let autoSyncTimer = null;
 function scheduleAutoSync(){
   if(!state.sync.auto || !state.sync.token) return;
-  clearTimeout(autoSyncTimer);
-  autoSyncTimer = setTimeout(function(){ syncNow(true); }, 8000);
+  const pending = state.sync.pendingCount || 0;
+  if(pending >= SYNC_MIN_QUESTIONS){
+    // 已达到题数阈值：短暂防抖后同步（清掉可能存在的兜底计时器）
+    clearTimeout(autoSyncTimer);
+    autoSyncTimer = setTimeout(function(){ syncNow(true); }, SYNC_DEBOUNCE_MS);
+  }else if(!autoSyncTimer){
+    // 未达阈值：只设置一次兜底计时器，后续答题不重置它，否则永远等不到
+    autoSyncTimer = setTimeout(function(){ syncNow(true); }, SYNC_INTERVAL_MS);
+  }
 }
 
 /* ------------------------- 跨端同步：设置界面 ------------------------- */
@@ -5519,6 +5539,8 @@ function renderSyncInfo(){
   const lines = [
     '本机记录：已答 ' + Object.keys(state.records).length + ' 题 · 错题 ' + Object.keys(state.wrong).length +
       ' · 收藏 ' + Object.keys(state.fav).length + ' · 笔记 ' + Object.keys(state.notes).length + ' 条',
+    '待同步：' + (cfg.pendingCount || 0) + ' 题（攒满 ' + SYNC_MIN_QUESTIONS + ' 题 或 间隔 ' +
+      Math.round(SYNC_INTERVAL_MS / 60000) + ' 分钟自动同步，切换页面时也会补同步）',
     'Token：' + (cfg.token
       ? '已保存（' + esc(String(cfg.token).slice(0, 6)) + '****，仅本机）'
       : '未配置'),
