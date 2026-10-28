@@ -1,7 +1,7 @@
-/* global KEMU1_BANK, KEMU1_META, KEMU4_BANK, KEMU4_META */
+/* global MOTO_D_BANK, MOTO_D_META */
 
 /**
- * 厦门科目一 / 科目四快刷应用
+ * 厦门摩托车 D 照科目一快刷应用
  *
  * 数据流：
  *   data.js（题库） -> state（筛选、题单、答题记录） -> render（DOM）
@@ -10,35 +10,25 @@
  * 1. 不引入框架，页面可以直接通过任意静态服务器打开，也可以离线使用；
  * 2. 所有题库文本都通过 escapeHtml 后再写入 innerHTML，避免第三方题目注入脚本；
  * 3. 学习记录只存 localStorage，不上传任何服务器；
- * 4. 两科题单与统计互相隔离，切换科目不会把科目一进度算进科目四；
- * 5. 题单一经生成就固定，避免答题过程中因为排序变化而“原地换题”；
- * 6. 跳过不等于做过，只有真正提交答案才会更新“已做”记录。
+ * 4. 题单一经生成就固定，避免答题过程中因为排序变化而“原地换题”；
+ * 5. 跳过不等于做过，只有真正提交答案才会更新“已做”记录。
  */
 
 (() => {
   'use strict';
 
-  const STATE_KEY = 'KEMU1_XIAMEN_STATE_V1';
+  const STATE_KEY = 'MOTO_D_XIAMEN_STATE_V1';
   const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
   const AUTO_NEXT_DELAY = 850;
   const SUBJECT_CONFIG = {
     ke1: {
       key: 'ke1',
-      name: '科目一',
-      shortName: '科一',
-      idPrefix: '',
-      bank: typeof KEMU1_BANK !== 'undefined' ? KEMU1_BANK : [],
-      meta: typeof KEMU1_META !== 'undefined' ? KEMU1_META : {},
-      importedKey: 'KEMU1_XIAMEN_IMPORTED_BANK_V1',
-    },
-    ke4: {
-      key: 'ke4',
-      name: '科目四',
-      shortName: '科四',
-      idPrefix: 'k4-',
-      bank: typeof KEMU4_BANK !== 'undefined' ? KEMU4_BANK : [],
-      meta: typeof KEMU4_META !== 'undefined' ? KEMU4_META : {},
-      importedKey: 'KEMU4_XIAMEN_IMPORTED_BANK_V1',
+      name: '摩托车 D 照科目一',
+      shortName: 'D照科一',
+      idPrefix: 'moto-',
+      bank: typeof MOTO_D_BANK !== 'undefined' ? MOTO_D_BANK : [],
+      meta: typeof MOTO_D_META !== 'undefined' ? MOTO_D_META : {},
+      importedKey: 'MOTO_D_XIAMEN_IMPORTED_BANK_V1',
     },
   };
 
@@ -102,8 +92,6 @@
       wrong: {},
       favorites: {},
       daily: {},
-      // 每科保存自己的题单和当前位置，切换科目后再切回来可以从原处继续。
-      subjectSessions: {},
       session: {
         subject: 'ke1',
         queue: [],
@@ -140,10 +128,6 @@
         wrong: saved.wrong && typeof saved.wrong === 'object' ? saved.wrong : {},
         favorites: saved.favorites && typeof saved.favorites === 'object' ? saved.favorites : {},
         daily: saved.daily && typeof saved.daily === 'object' ? saved.daily : {},
-        subjectSessions:
-          saved.subjectSessions && typeof saved.subjectSessions === 'object'
-            ? saved.subjectSessions
-            : {},
         session: {
           ...base.session,
           ...(saved.session || {}),
@@ -167,10 +151,6 @@
 
   function saveState() {
     try {
-      // 当前 session 就是所属科目的快照；统一在保存时写回，避免每个操作都重复维护。
-      if (state.session && state.session.subject) {
-        state.subjectSessions[state.session.subject] = state.session;
-      }
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch (error) {
       console.warn('保存学习记录失败。', error);
@@ -289,7 +269,7 @@
 
       const rawId = String(item.id ?? item.qid ?? `import-${index + 1}`);
       result.push({
-        // 科目四题号可能与科目一重叠，因此导入时也要加上相同的 k4- 前缀。
+        // 导入题号统一加 moto- 前缀，避免与外部题库的普通数字题号冲突。
         id: `${subjectConfig.idPrefix}${rawId}`,
         sourceIds: [String(item.id ?? item.qid ?? index + 1)],
         subject,
@@ -504,21 +484,6 @@
     return '未做优先';
   }
 
-  /**
-   * 刷新科目切换按钮的选中态和题量。
-   * 按钮只负责切换数据集，真正的记录隔离依赖每道题的 subject 与唯一 ID。
-   */
-  function renderSubjectSwitch() {
-    $$('[data-subject]').forEach((button) => {
-      const subject = button.dataset.subject;
-      const selected = subject === activeSubject;
-      button.classList.toggle('active', selected);
-      button.setAttribute('aria-selected', String(selected));
-      const count = SUBJECT_CONFIG[subject]?.bank?.length || 0;
-      button.title = `${SUBJECT_CONFIG[subject]?.name || subject} · ${count} 题`;
-    });
-  }
-
   function renderStats() {
     const bankCount = activeBank.length;
     // 统计必须限制在当前科目题库内，否则切换科目时会把另一科记录算进来。
@@ -705,7 +670,7 @@
     const submitted = Boolean(state.session.submitted);
     const correct =
       submitted && answerKey(state.session.selected) === answerKey(question.answer);
-    // 题库里的媒体字段既可能是静态图片，也可能是科目一/科目四动画题的视频。
+    // 题库里的媒体字段可能包含静态图片或动画题视频。
     const isVideo = /\.(mp4|webm|ogg)(?:[?#].*)?$/i.test(question.image || '');
     const media = question.image
       ? `
@@ -765,7 +730,6 @@
   }
 
   function render() {
-    renderSubjectSwitch();
     $('#modeLabel').textContent = `${activeMeta.exam || activeSubject} · ${filterLabel()}`;
     document.title = `${SUBJECT_CONFIG[activeSubject]?.shortName || '驾考'}快刷 · 厦门 2026`;
     renderStats();
@@ -886,36 +850,6 @@
     if (message) showToast(message);
   }
 
-  /**
-   * 切换考试科目时重建题单，但不删除任何答题记录。
-   * 科目一的旧记录使用原题号；科目四题号统一带 k4- 前缀，因此两边不会串数据。
-   */
-  function switchSubject(subject) {
-    if (!SUBJECT_CONFIG[subject] || subject === activeSubject) return;
-    window.clearTimeout(autoNextTimer);
-    state.subjectSessions[activeSubject] = state.session;
-    const baseSession = defaultState().session;
-    const savedSession = state.subjectSessions[subject];
-    state.session = savedSession
-      ? {
-          ...baseSession,
-          ...savedSession,
-          subject,
-          filters: {
-            ...baseSession.filters,
-            ...(savedSession.filters || {}),
-          },
-        }
-      : { ...baseSession, subject };
-    resolveBank(subject);
-    populateChapters();
-    syncFilterControls();
-    restoreOrCreateQueue();
-    saveState();
-    render();
-    showToast(`已切换到${SUBJECT_CONFIG[subject].name}`);
-  }
-
   function setOnlyUnseen() {
     state.session.filters = {
       chapter: '',
@@ -941,7 +875,7 @@
 
   function resetProgress() {
     const confirmed = window.confirm(
-      '确定清空科目一和科目四的全部答题进度、错题、收藏吗？此操作不可撤销。',
+      '确定清空摩托车 D 照科一的全部答题进度、错题和收藏吗？此操作不可撤销。',
     );
     if (!confirmed) return;
 
@@ -949,7 +883,6 @@
     state.wrong = {};
     state.favorites = {};
     state.daily = {};
-    state.subjectSessions = {};
     state.session = defaultState().session;
     state.session.subject = activeSubject;
     saveState();
@@ -999,7 +932,6 @@
       activeMeta = buildMetaForImported(imported, activeSubject);
       state.session = defaultState().session;
       state.session.subject = activeSubject;
-      state.subjectSessions[activeSubject] = state.session;
       populateChapters();
       syncFilterControls();
       buildQueue();
@@ -1017,7 +949,6 @@
     resolveBank(activeSubject);
     state.session = defaultState().session;
     state.session.subject = activeSubject;
-    state.subjectSessions[activeSubject] = state.session;
     populateChapters();
     syncFilterControls();
     buildQueue();
@@ -1046,9 +977,6 @@
       dialog.addEventListener('click', (event) => {
         if (event.target === dialog) dialog.close();
       });
-    });
-    $$('[data-subject]').forEach((button) => {
-      button.addEventListener('click', () => switchSubject(button.dataset.subject));
     });
 
     // “只看未做”和“仅错题”在语义上互斥，勾选其中一个时自动取消另一个。
