@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2d52">
+  <meta name="description" content="厦门科目一快速刷题工具，未做优先、即时解析、错题复习，学习记录仅保存在本机。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230b2d52%22/><path d=%22M18 34h28M22 24l-5 10v12h8V43h14v3h8V34l-5-10z%22 fill=%22%23f5c542%22/></svg>">
+  <title>科一快刷 · 厦门 2026</title>
+  <style>
+    /* ============================================================
+       设计变量：深海军蓝 + 路牌黄，形成清晰的驾驶考试语义。
+       页面不依赖外部字体、图标库或 CSS 框架，断网也能完整使用。
+       ============================================================ */
+    :root {
+      --ink: #102033;
+      --ink-soft: #5e6d7c;
+      --paper: #f5f2e9;
+      --card: #fffdf8;
+      --navy: #0b2d52;
+      --navy-2: #123f70;
+      --yellow: #f5c542;
+      --yellow-soft: #fff3c2;
+      --green: #167451;
+      --green-soft: #e2f8ee;
+      --red: #bd2f34;
+      --red-soft: #ffebeb;
+      --blue-soft: #e7f1fb;
+      --line: #ddd7ca;
+      --shadow: 0 18px 55px rgba(29, 45, 63, .09);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 3%, rgba(245, 197, 66, .22), transparent 25rem),
+        linear-gradient(180deg, #f8f5ed 0%, var(--paper) 55%, #eeeadf 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+      outline: 3px solid rgba(11, 45, 82, .28);
+      outline-offset: 2px;
+    }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* 顶部品牌区保持轻量，手机端也不会挤压答题空间。 */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      color: #fff;
+      background: rgba(11, 45, 82, .96);
+      border-bottom: 1px solid rgba(255, 255, 255, .11);
+      backdrop-filter: blur(16px);
+    }
+
+    .topbar-inner {
+      width: min(1180px, calc(100% - 28px));
+      min-height: 62px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: var(--navy);
+      background: var(--yellow);
+      border-radius: 11px;
+      font-size: 19px;
+      font-weight: 900;
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1);
+    }
+
+    .brand-copy strong {
+      display: block;
+      font-size: 17px;
+      letter-spacing: .04em;
+      line-height: 1.3;
+    }
+
+    .brand-copy small {
+      display: block;
+      margin-top: 1px;
+      color: rgba(255, 255, 255, .65);
+      font-size: 11px;
+      letter-spacing: .08em;
+    }
+
+    .top-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 7px;
+    }
+
+    .icon-button {
+      min-width: 38px;
+      height: 36px;
+      padding: 0 12px;
+      color: #fff;
+      background: rgba(255, 255, 255, .09);
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 10px;
+      font-size: 13px;
+      transition: background .18s ease, transform .18s ease;
+    }
+    .icon-button:hover { background: rgba(255, 255, 255, .17); }
+    .icon-button:active { transform: translateY(1px); }
+
+    .page {
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 24px 0 70px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 286px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .main-column { min-width: 0; }
+
+    /* ============================================================
+       筛选区：默认压缩成一行，把大部分屏幕留给题目本身。
+       ============================================================ */
+    .control-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      background: rgba(255, 253, 248, .82);
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      box-shadow: 0 8px 22px rgba(29, 45, 63, .04);
+    }
+
+    .control-title {
+      flex: 0 0 auto;
+      padding-right: 12px;
+      border-right: 1px solid var(--line);
+    }
+    .control-title strong { display: block; font-size: 13px; }
+    .control-title span { color: var(--ink-soft); font-size: 11px; }
+
+    .filters {
+      min-width: 0;
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .select-wrap {
+      position: relative;
+      min-width: 148px;
+    }
+    .select-wrap::after {
+      content: "⌄";
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-55%);
+      color: var(--ink-soft);
+      pointer-events: none;
+    }
+    select {
+      width: 100%;
+      height: 36px;
+      padding: 0 30px 0 11px;
+      color: var(--ink);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      appearance: none;
+    }
+
+    .check-chip {
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 11px;
+      color: var(--ink-soft);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      font-size: 13px;
+      user-select: none;
+    }
+    .check-chip:has(input:checked) {
+      color: var(--navy);
+      background: var(--blue-soft);
+      border-color: #a8c3df;
+      font-weight: 700;
+    }
+    .check-chip input { accent-color: var(--navy); }
+
+    .small-button {
+      min-height: 36px;
+      padding: 0 12px;
+      color: var(--navy);
+      background: transparent;
+      border: 1px solid #a9b8c7;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .small-button:hover { background: var(--blue-soft); }
+
+    /* ============================================================
+       题目卡片
+       ============================================================ */
+    .question-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 560px;
+      /* JS 调用 scrollIntoView 时给吸顶导航留出空间，题号不会被遮住。 */
+      scroll-margin-top: 76px;
+      padding: 26px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .question-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 5px;
+      background: linear-gradient(90deg, var(--navy) 0 72%, var(--yellow) 72% 100%);
+    }
+
+    .question-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 17px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 25px;
+      padding: 2px 9px;
+      color: var(--ink-soft);
+      background: #f2efe7;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .tag.number { color: var(--navy); background: var(--yellow-soft); }
+    .tag.type { color: #fff; background: var(--navy); }
+
+    .favorite-button {
+      width: 35px;
+      height: 35px;
+      margin-left: auto;
+      display: grid;
+      place-items: center;
+      color: #9a8f7c;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      font-size: 19px;
+      transition: .18s ease;
+    }
+    .favorite-button:hover { color: var(--navy); background: var(--yellow-soft); }
+    .favorite-button.active {
+      color: #fff;
+      background: #c79210;
+      border-color: #c79210;
+    }
+
+    .stem {
+      margin: 0 0 20px;
+      font-size: clamp(19px, 2.2vw, 24px);
+      line-height: 1.55;
+      letter-spacing: .01em;
+      white-space: pre-wrap;
+    }
+
+    .question-brief {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: -6px 0 16px;
+      color: var(--ink-soft);
+      font-size: 12px;
+    }
+    .question-brief::before {
+      content: "";
+      width: 22px;
+      height: 2px;
+      background: var(--yellow);
+    }
+
+    .question-image-wrap {
+      margin: 0 0 18px;
+      padding: 10px;
+      background: #f0eee8;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    .question-image,
+    .question-video {
+      display: block;
+      max-width: 100%;
+      max-height: 390px;
+      margin: 0 auto;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+    .question-video { width: 100%; background: #121820; }
+
+    .options {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .option {
+      width: 100%;
+      min-height: 54px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 13px 15px;
+      color: var(--ink);
+      text-align: left;
+      background: #fff;
+      border: 1.5px solid #ddd8cd;
+      border-radius: 13px;
+      transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .option:hover:not(:disabled) {
+      border-color: #88a4c0;
+      background: #f9fbfd;
+      transform: translateY(-1px);
+    }
+    .option-key {
+      width: 27px;
+      height: 27px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      color: var(--navy);
+      background: #efece4;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .option-text { padding-top: 1px; }
+    .option.selected {
+      border-color: var(--navy-2);
+      background: var(--blue-soft);
+    }
+    .option.selected .option-key { color: #fff; background: var(--navy); }
+    .option.correct {
+      border-color: var(--green);
+      background: var(--green-soft);
+    }
+    .option.correct .option-key { color: #fff; background: var(--green); }
+    .option.wrong {
+      border-color: var(--red);
+      background: var(--red-soft);
+    }
+    .option.wrong .option-key { color: #fff; background: var(--red); }
+
+    .question-actions {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #ebe6da;
+    }
+    .question-actions .grow { flex: 1; }
+
+    .primary-button, .secondary-button {
+      min-height: 42px;
+      padding: 0 17px;
+      border-radius: 11px;
+      font-weight: 750;
+    }
+    .primary-button {
+      color: #fff;
+      background: var(--navy);
+      border: 1px solid var(--navy);
+      box-shadow: 0 5px 14px rgba(11, 45, 82, .17);
+    }
+    .primary-button:hover { background: var(--navy-2); }
+    .secondary-button {
+      color: var(--navy);
+      background: #fff;
+      border: 1px solid #bcc5ce;
+    }
+    .secondary-button:hover { background: var(--blue-soft); }
+
+    /* 答题反馈与解析在提交后出现，默认不打断尚未作答的视线。 */
+    .result-panel {
+      margin-top: 18px;
+      padding: 16px;
+      background: #f3f0e8;
+      border: 1px solid #e4ded1;
+      border-radius: 14px;
+      animation: reveal .2s ease-out both;
+    }
+    .result-panel.correct { background: var(--green-soft); border-color: #b7dfcf; }
+    .result-panel.wrong { background: var(--red-soft); border-color: #f0c2c2; }
+    .result-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-weight: 800;
+    }
+    .result-icon {
+      width: 29px;
+      height: 29px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      border-radius: 50%;
+      font-size: 15px;
+    }
+    .correct .result-icon { background: var(--green); }
+    .wrong .result-icon { background: var(--red); }
+    .result-answer { margin-left: auto; color: var(--ink-soft); font-size: 13px; font-weight: 650; }
+    .analysis-title { margin: 14px 0 5px; font-size: 13px; font-weight: 800; }
+    .analysis-text {
+      margin: 0;
+      color: #39495a;
+      font-size: 14px;
+      line-height: 1.75;
+      white-space: pre-wrap;
+    }
+    .mnemonic {
+      margin-top: 12px;
+      padding: 10px 12px;
+      color: #624b0d;
+      background: var(--yellow-soft);
+      border-left: 3px solid var(--yellow);
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+    }
+
+    .empty-state {
+      min-height: 430px;
+      display: grid;
+      place-items: center;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    .empty-icon { font-size: 54px; }
+    .empty-state h2 { margin: 8px 0 6px; }
+    .empty-state p { max-width: 440px; margin: 0 auto 18px; color: var(--ink-soft); }
+
+    .complete-card {
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .complete-card .score {
+      font-size: clamp(52px, 10vw, 86px);
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1;
+    }
+
+    /* ============================================================
+       侧栏：进度、快捷入口、当前题库说明。
+       ============================================================ */
+    .sidebar {
+      position: sticky;
+      top: 82px;
+      display: grid;
+      gap: 14px;
+    }
+    .side-card {
+      padding: 17px;
+      background: rgba(255, 253, 248, .94);
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      box-shadow: 0 12px 32px rgba(29, 45, 63, .06);
+    }
+    .side-card h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      letter-spacing: .03em;
+    }
+
+    .progress-overview {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .progress-ring {
+      --value: 0;
+      width: 82px;
+      height: 82px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--yellow) calc(var(--value) * 1%), #e8e3d8 0);
+      border-radius: 50%;
+    }
+    .progress-ring::before {
+      content: "";
+      grid-area: 1 / 1;
+      width: 63px;
+      height: 63px;
+      background: var(--card);
+      border-radius: 50%;
+    }
+    .progress-ring strong {
+      z-index: 1;
+      grid-area: 1 / 1;
+      font-size: 17px;
+    }
+    .progress-copy strong { font-size: 23px; }
+    .progress-copy span { display: block; color: var(--ink-soft); font-size: 12px; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-top: 14px;
+    }
+    .stat-item {
+      padding: 9px 4px;
+      text-align: center;
+      background: #f5f2ea;
+      border-radius: 10px;
+    }
+    .stat-item strong { display: block; font-size: 16px; }
+    .stat-item span { color: var(--ink-soft); font-size: 10px; }
+
+    .queue-bar {
+      height: 6px;
+      margin-top: 10px;
+      overflow: hidden;
+      background: #e8e3d8;
+      border-radius: 99px;
+    }
+    .queue-bar > i {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--navy), #4d86bc);
+      border-radius: inherit;
+      transition: width .25s ease;
+    }
+
+    .quick-actions { display: grid; gap: 8px; }
+    .quick-action {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 42px;
+      padding: 0 12px;
+      color: var(--ink);
+      background: #f8f5ee;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      text-align: left;
+    }
+    .quick-action:hover { border-color: #9dafc0; background: var(--blue-soft); }
+    .quick-action b { color: var(--navy); font-size: 12px; }
+
+    .jump-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 7px;
+    }
+    .jump-row input {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+    }
+
+    .shortcut-list {
+      display: grid;
+      gap: 7px;
+      color: var(--ink-soft);
+      font-size: 12px;
+    }
+    .shortcut-list div { display: flex; justify-content: space-between; gap: 8px; }
+    kbd {
+      display: inline-block;
+      min-width: 23px;
+      padding: 1px 5px;
+      color: var(--navy);
+      background: #fff;
+      border: 1px solid #cfc8ba;
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      font: 600 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: center;
+    }
+
+    .source-note {
+      margin-top: 9px;
+      color: var(--ink-soft);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    footer {
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 0 0 34px;
+      color: #776f62;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    /* 原生 dialog 统一用来承载快捷键、题库说明与导入操作。 */
+    dialog {
+      width: min(620px, calc(100% - 28px));
+      max-height: min(760px, calc(100vh - 32px));
+      padding: 0;
+      color: var(--ink);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 30px 90px rgba(9, 28, 47, .28);
+    }
+    dialog::backdrop { background: rgba(7, 24, 40, .62); backdrop-filter: blur(4px); }
+    .dialog-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .dialog-head h2 { margin: 0; font-size: 17px; }
+    .dialog-head button {
+      width: 34px;
+      height: 34px;
+      margin-left: auto;
+      color: var(--ink-soft);
+      background: #f2efe7;
+      border: 0;
+      border-radius: 50%;
+      font-size: 18px;
+    }
+    .dialog-body { padding: 18px; overflow: auto; }
+    .dialog-body h3 { margin: 17px 0 7px; font-size: 14px; }
+    .dialog-body h3:first-child { margin-top: 0; }
+    .dialog-body p { margin: 6px 0; color: var(--ink-soft); font-size: 13px; }
+    .dialog-shortcuts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .dialog-shortcuts div {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      background: #f5f2ea;
+      border-radius: 9px;
+      font-size: 13px;
+    }
+    .dialog-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 80;
+      left: 50%;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      max-width: calc(100% - 32px);
+      padding: 10px 16px;
+      color: #fff;
+      background: rgba(15, 36, 55, .94);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .2);
+      font-size: 13px;
+      transform: translate(-50%, 18px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @media (max-width: 900px) {
+      .page { grid-template-columns: 1fr; }
+      .sidebar {
+        position: static;
+        grid-template-columns: 1fr 1fr;
+      }
+      .side-card:first-child { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 14px; }
+      .topbar-inner { width: min(100% - 20px, 1180px); min-height: 56px; }
+      .brand-mark { width: 32px; height: 32px; }
+      .brand-copy strong { font-size: 15px; }
+      .brand-copy small { display: none; }
+      .icon-button { min-width: 34px; height: 34px; padding: 0 9px; }
+      .page { width: min(100% - 20px, 1180px); padding-top: 12px; gap: 12px; }
+      .control-card { align-items: flex-start; padding: 10px; }
+      .control-title { display: none; }
+      .filters { gap: 6px; }
+      .select-wrap { flex: 1 1 100%; }
+      .check-chip { flex: 1 1 auto; justify-content: center; padding: 0 8px; }
+      .question-card { min-height: 0; padding: 18px 14px; border-radius: 16px; }
+      .stem { font-size: 18px; margin-bottom: 16px; }
+      .option { min-height: 51px; padding: 12px; }
+      .question-actions { flex-wrap: wrap; }
+      .question-actions .grow { display: none; }
+      .question-actions .primary-button { flex: 1; }
+      .result-panel { padding: 13px; }
+      .result-head { align-items: flex-start; flex-wrap: wrap; }
+      .result-answer { width: 100%; margin-left: 39px; }
+      .sidebar { grid-template-columns: 1fr; }
+      .side-card:first-child { grid-column: auto; }
+      .side-card.side-secondary { display: none; }
+      .dialog-shortcuts { grid-template-columns: 1fr; }
+      footer { width: calc(100% - 22px); padding-bottom: 24px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./" aria-label="科一快刷首页">
+        <span class="brand-mark" aria-hidden="true">1</span>
+        <span class="brand-copy">
+          <strong>科一快刷</strong>
+          <small>厦门 · 2026</small>
+        </span>
+      </a>
+      <div class="top-actions">
+        <button class="icon-button" id="btnBank" type="button" title="查看题库与导入说明">题库</button>
+        <button class="icon-button" id="btnHelp" type="button" title="查看键盘快捷键">快捷键</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="page">
+    <main class="main-column">
+      <section class="control-card" aria-label="刷题筛选">
+        <div class="control-title">
+          <strong>本轮题单</strong>
+          <span id="modeLabel">未做优先</span>
+        </div>
+        <div class="filters">
+          <div class="select-wrap">
+            <label class="sr-only" for="chapterSelect">章节筛选</label>
+            <select id="chapterSelect">
+              <option value="">全部章节</option>
+            </select>
+          </div>
+          <label class="check-chip" title="只练从未作答的题">
+            <input id="onlyUnseen" type="checkbox"> 只看未做
+          </label>
+          <label class="check-chip" title="只练已经答错的题">
+            <input id="onlyWrong" type="checkbox"> 仅错题
+          </label>
+          <label class="check-chip" title="只练已收藏的题">
+            <input id="onlyFavorite" type="checkbox"> 收藏
+          </label>
+          <button class="small-button" id="btnNewRound" type="button">生成新题单</button>
+        </div>
+      </section>
+
+      <section class="question-card" id="questionCard" aria-live="polite"></section>
+    </main>
+
+    <aside class="sidebar" aria-label="学习进度">
+      <section class="side-card">
+        <h2>学习进度</h2>
+        <div class="progress-overview">
+          <div class="progress-ring" id="progressRing" aria-label="题库完成度">
+            <strong id="progressPercent">0%</strong>
+          </div>
+          <div class="progress-copy">
+            <strong id="answeredCount">0</strong>
+            <span>道题已作答</span>
+            <span id="remainingCount">题库加载中</span>
+          </div>
+        </div>
+        <div class="queue-bar" aria-hidden="true"><i id="queueProgress"></i></div>
+        <div class="stat-grid">
+          <div class="stat-item"><strong id="accuracyCount">--</strong><span>正确率</span></div>
+          <div class="stat-item"><strong id="wrongCount">0</strong><span>错题</span></div>
+          <div class="stat-item"><strong id="favoriteCount">0</strong><span>收藏</span></div>
+        </div>
+      </section>
+
+      <section class="side-card">
+        <h2>快速入口</h2>
+        <div class="quick-actions">
+          <button class="quick-action" id="btnContinue" type="button">
+            <span>继续未做题</span><b id="unseenCount">0 题</b>
+          </button>
+          <button class="quick-action" id="btnReviewWrong" type="button">
+            <span>错题速刷</span><b id="wrongActionCount">0 题</b>
+          </button>
+          <div class="jump-row">
+            <label class="sr-only" for="jumpInput">跳到当前题单中的第几题</label>
+            <input id="jumpInput" type="number" min="1" placeholder="跳到题号">
+            <button class="small-button" id="btnJump" type="button">跳转</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="side-card side-secondary">
+        <h2>快捷操作</h2>
+        <div class="shortcut-list">
+          <div><span>选择答案</span><span><kbd>1</kbd>-<kbd>4</kbd> / <kbd>A</kbd>-<kbd>D</kbd></span></div>
+          <div><span>提交 / 下一题</span><span><kbd>Enter</kbd></span></div>
+          <div><span>上一题 / 下一题</span><span><kbd>←</kbd> <kbd>→</kbd></span></div>
+          <div><span>收藏本题</span><kbd>F</kbd></div>
+          <div><span>跳过本题</span><kbd>X</kbd></div>
+        </div>
+        <p class="source-note" id="sourceNote">题库信息加载中…</p>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    <div>题库为公开资料整理，适配厦门小车科目一考试范围；不是交管部门或驾校一点通官方实时接口。法规如有调整，请以厦门交警最新公告为准。</div>
+    <div>学习进度、错题与收藏仅保存在当前浏览器，不会上传服务器。</div>
+  </footer>
+
+  <dialog id="helpDialog">
+    <div class="dialog-head">
+      <h2>键盘快捷键</h2>
+      <button type="button" data-close-dialog="helpDialog" aria-label="关闭">×</button>
+    </div>
+    <div class="dialog-body">
+      <p>用鼠标或触屏点选项也可以。输入框和下拉框获得焦点时，快捷键会自动停用。</p>
+      <div class="dialog-shortcuts">
+        <div><span>选项 A-D</span><span><kbd>1</kbd>-<kbd>4</kbd> / <kbd>A</kbd>-<kbd>D</kbd></span></div>
+        <div><span>提交多选题</span><kbd>Enter</kbd></div>
+        <div><span>下一题</span><kbd>→</kbd> / <kbd>Enter</kbd></div>
+        <div><span>上一题</span><kbd>←</kbd> / <kbd>Backspace</kbd></div>
+        <div><span>收藏 / 取消收藏</span><kbd>F</kbd></div>
+        <div><span>跳过本题</span><kbd>X</kbd></div>
+        <div><span>打开快捷键</span><kbd>?</kbd></div>
+        <div><span>关闭弹窗</span><kbd>Esc</kbd></div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="bankDialog">
+    <div class="dialog-head">
+      <h2>题库与数据</h2>
+      <button type="button" data-close-dialog="bankDialog" aria-label="关闭">×</button>
+    </div>
+    <div class="dialog-body">
+      <h3>当前题库</h3>
+      <p id="bankInfoText">正在读取题库信息…</p>
+      <p>内置题库已去除完全重复题目，图片保存在本地。题目内容用于个人学习，非官方题库接口，不保证与考场原题逐字相同。</p>
+
+      <h3>导入题库</h3>
+      <p>支持 JSON 数组，或 <code>{ "questions": [...] }</code> 结构。题目至少应包含 <code>question</code>、<code>options</code>、<code>answer</code>。</p>
+      <div class="dialog-actions">
+        <button class="primary-button" id="btnImport" type="button">选择 JSON 文件</button>
+        <button class="secondary-button" id="btnRestoreBank" type="button">恢复内置题库</button>
+        <button class="secondary-button" id="btnExportProgress" type="button">导出学习记录</button>
+        <button class="secondary-button" id="btnResetProgress" type="button">清空学习进度</button>
+      </div>
+      <input class="sr-only" id="fileInput" type="file" accept=".json,application/json">
+
+      <h3>更新内置题库</h3>
+      <p>开发者可运行 <code>node tools/build-kemu1-data.js &lt;questions.json&gt;</code> 重新生成数据文件。</p>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- data.js 先加载，app.js 再根据题库和本地记录初始化页面。 -->
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
