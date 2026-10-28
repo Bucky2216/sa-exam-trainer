@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0b2d52">
-  <meta name="description" content="厦门科目一快速刷题工具，未做优先、即时解析、错题复习，学习记录仅保存在本机。">
+  <meta name="description" content="厦门科目一、科目四快速刷题工具，未做优先、即时解析、错题复习，学习记录仅保存在本机。">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230b2d52%22/><path d=%22M18 34h28M22 24l-5 10v12h8V43h14v3h8V34l-5-10z%22 fill=%22%23f5c542%22/></svg>">
-  <title>科一快刷 · 厦门 2026</title>
+  <title>驾考快刷 · 厦门 2026</title>
   <style>
     /* ============================================================
        设计变量：深海军蓝 + 路牌黄，形成清晰的驾驶考试语义。
@@ -171,6 +171,39 @@
       border: 1px solid var(--line);
       border-radius: 15px;
       box-shadow: 0 8px 22px rgba(29, 45, 63, .04);
+    }
+
+    .subject-switch {
+      flex: 0 0 auto;
+      display: flex;
+      gap: 3px;
+      padding: 3px;
+      background: #eae5d9;
+      border-radius: 11px;
+    }
+    .subject-button {
+      min-width: 64px;
+      min-height: 31px;
+      padding: 0 10px;
+      color: var(--ink-soft);
+      background: transparent;
+      border: 0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 750;
+      transition: .16s ease;
+    }
+    .subject-button span {
+      display: none;
+      margin-left: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      opacity: .65;
+    }
+    .subject-button.active {
+      color: #fff;
+      background: var(--navy);
+      box-shadow: 0 3px 9px rgba(11, 45, 82, .18);
     }
 
     .control-title {
@@ -757,6 +790,8 @@
       .icon-button { min-width: 34px; height: 34px; padding: 0 9px; }
       .page { width: min(100% - 20px, 1180px); padding-top: 12px; gap: 12px; }
       .control-card { align-items: flex-start; padding: 10px; }
+      .subject-switch { order: -1; }
+      .subject-button { min-width: 58px; }
       .control-title { display: none; }
       .filters { gap: 6px; }
       .select-wrap { flex: 1 1 100%; }
@@ -789,10 +824,10 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="./" aria-label="科一快刷首页">
-        <span class="brand-mark" aria-hidden="true">1</span>
+      <a class="brand" href="./" aria-label="驾考快刷首页">
+        <span class="brand-mark" aria-hidden="true">驾</span>
         <span class="brand-copy">
-          <strong>科一快刷</strong>
+          <strong>驾考快刷</strong>
           <small>厦门 · 2026</small>
         </span>
       </a>
@@ -806,6 +841,12 @@
   <div class="page">
     <main class="main-column">
       <section class="control-card" aria-label="刷题筛选">
+        <div class="subject-switch" role="tablist" aria-label="选择考试科目">
+          <button class="subject-button active" type="button" role="tab"
+                  aria-selected="true" data-subject="ke1">科目一</button>
+          <button class="subject-button" type="button" role="tab"
+                  aria-selected="false" data-subject="ke4">科目四</button>
+        </div>
         <div class="control-title">
           <strong>本轮题单</strong>
           <span id="modeLabel">未做优先</span>
@@ -886,7 +927,7 @@
   </div>
 
   <footer>
-    <div>题库为公开资料整理，适配厦门小车科目一考试范围；不是交管部门或驾校一点通官方实时接口。法规如有调整，请以厦门交警最新公告为准。</div>
+    <div>题库为公开资料整理，适配厦门小车科目一、科目四考试范围；不是交管部门或驾校一点通官方实时接口。法规如有调整，请以厦门交警最新公告为准。</div>
     <div>学习进度、错题与收藏仅保存在当前浏览器，不会上传服务器。</div>
   </footer>
 
@@ -920,8 +961,8 @@
       <p id="bankInfoText">正在读取题库信息…</p>
       <p>内置题库已去除完全重复题目，图片保存在本地。题目内容用于个人学习，非官方题库接口，不保证与考场原题逐字相同。</p>
 
-      <h3>导入题库</h3>
-      <p>支持 JSON 数组，或 <code>{ "questions": [...] }</code> 结构。题目至少应包含 <code>question</code>、<code>options</code>、<code>answer</code>。</p>
+      <h3>导入当前科目题库</h3>
+      <p>导入会替换当前选中的科目题库，另一科不受影响。支持 JSON 数组，或 <code>{ "questions": [...] }</code> 结构；题目至少应包含 <code>question</code>、<code>options</code>、<code>answer</code>。</p>
       <div class="dialog-actions">
         <button class="primary-button" id="btnImport" type="button">选择 JSON 文件</button>
         <button class="secondary-button" id="btnRestoreBank" type="button">恢复内置题库</button>

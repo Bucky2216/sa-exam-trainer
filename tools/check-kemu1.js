@@ -21,80 +21,108 @@ const sandbox = { window: {} };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(dataFile, 'utf8'), sandbox, { filename: 'data.js' });
 
-const bank = sandbox.window.KEMU1_BANK;
-const meta = sandbox.window.KEMU1_META;
-if (!Array.isArray(bank) || !bank.length) {
-  console.error('题库为空或 KEMU1_BANK 未定义');
+const subjects = [
+  {
+    key: 'ke1',
+    name: '科目一',
+    bank: sandbox.window.KEMU1_BANK,
+    meta: sandbox.window.KEMU1_META,
+  },
+  {
+    key: 'ke4',
+    name: '科目四',
+    bank: sandbox.window.KEMU4_BANK,
+    meta: sandbox.window.KEMU4_META,
+  },
+];
+if (subjects.some((subject) => !Array.isArray(subject.bank) || !subject.bank.length)) {
+  console.error('题库为空：KEMU1_BANK 或 KEMU4_BANK 未定义');
   process.exit(1);
 }
 
 let errors = 0;
 const ids = new Set();
 const signatures = new Set();
-const typeCounts = {};
-const chapterCounts = {};
-let imageCount = 0;
+for (const subject of subjects) {
+  const typeCounts = {};
+  const chapterCounts = {};
+  let mediaCount = 0;
 
-for (const [index, question] of bank.entries()) {
-  const tag = question.id || `#${index + 1}`;
-  if (!question.id || ids.has(question.id)) {
-    console.error(`题目 ID 缺失或重复：${tag}`);
-    errors += 1;
-  }
-  ids.add(question.id);
-
-  if (!question.question || !question.chapter) {
-    console.error(`题干或章节为空：${tag}`);
-    errors += 1;
-  }
-  if (!Array.isArray(question.options) || question.options.length < 2) {
-    console.error(`选项数量不足：${tag}`);
-    errors += 1;
-  }
-  if (!Array.isArray(question.answer) || !question.answer.length) {
-    console.error(`答案为空：${tag}`);
-    errors += 1;
-  }
-  for (const answerIndex of question.answer || []) {
-    if (!Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex >= question.options.length) {
-      console.error(`答案索引越界：${tag}`);
+  for (const [index, question] of subject.bank.entries()) {
+    const tag = question.id || `${subject.key}#${index + 1}`;
+    if (!question.id || ids.has(question.id)) {
+      console.error(`题目 ID 缺失或重复：${tag}`);
       errors += 1;
     }
-  }
-  if (['judge', 'single', 'multi'].includes(question.type) === false) {
-    console.error(`题型异常：${tag}`);
-    errors += 1;
-  }
-  if (question.type === 'judge' && question.options.length !== 2) {
-    console.error(`判断题不是两个选项：${tag}`);
-    errors += 1;
-  }
-  if (question.type === 'multi' && question.answer.length < 2) {
-    console.error(`多选题答案少于两个：${tag}`);
-    errors += 1;
-  }
-  if (question.type !== 'multi' && question.answer.length !== 1) {
-    console.error(`单选/判断题答案数量不是 1：${tag}`);
-    errors += 1;
-  }
+    ids.add(question.id);
 
-  const signature = [question.question, ...question.options].join('\u0000');
-  if (signatures.has(signature)) {
-    console.error(`题干和选项完全重复：${tag}`);
-    errors += 1;
-  }
-  signatures.add(signature);
-
-  if (question.image) {
-    imageCount += 1;
-    if (!fs.existsSync(path.join(root, question.image))) {
-      console.error(`图片不存在：${tag} -> ${question.image}`);
+    if (question.subject !== subject.key) {
+      console.error(`题目科目标记错误：${tag}`);
       errors += 1;
     }
+    if (!question.question || !question.chapter) {
+      console.error(`题干或章节为空：${tag}`);
+      errors += 1;
+    }
+    if (!Array.isArray(question.options) || question.options.length < 2) {
+      console.error(`选项数量不足：${tag}`);
+      errors += 1;
+    }
+    if (!Array.isArray(question.answer) || !question.answer.length) {
+      console.error(`答案为空：${tag}`);
+      errors += 1;
+    }
+    for (const answerIndex of question.answer || []) {
+      if (
+        !Number.isInteger(answerIndex) ||
+        answerIndex < 0 ||
+        answerIndex >= question.options.length
+      ) {
+        console.error(`答案索引越界：${tag}`);
+        errors += 1;
+      }
+    }
+    if (['judge', 'single', 'multi'].includes(question.type) === false) {
+      console.error(`题型异常：${tag}`);
+      errors += 1;
+    }
+    if (question.type === 'judge' && question.options.length !== 2) {
+      console.error(`判断题不是两个选项：${tag}`);
+      errors += 1;
+    }
+    if (question.type === 'multi' && question.answer.length < 2) {
+      console.error(`多选题答案少于两个：${tag}`);
+      errors += 1;
+    }
+    if (question.type !== 'multi' && question.answer.length !== 1) {
+      console.error(`单选/判断题答案数量不是 1：${tag}`);
+      errors += 1;
+    }
+
+    const signature = [subject.key, question.question, ...question.options].join('\u0000');
+    if (signatures.has(signature)) {
+      console.error(`同科题干和选项完全重复：${tag}`);
+      errors += 1;
+    }
+    signatures.add(signature);
+
+    if (question.image) {
+      mediaCount += 1;
+      if (!fs.existsSync(path.join(root, question.image))) {
+        console.error(`媒体不存在：${tag} -> ${question.image}`);
+        errors += 1;
+      }
+    }
+
+    typeCounts[question.type] = (typeCounts[question.type] || 0) + 1;
+    chapterCounts[question.chapter] = (chapterCounts[question.chapter] || 0) + 1;
   }
 
-  typeCounts[question.type] = (typeCounts[question.type] || 0) + 1;
-  chapterCounts[question.chapter] = (chapterCounts[question.chapter] || 0) + 1;
+  console.log(
+    `${subject.name}：${subject.bank.length} 题，${mediaCount} 个媒体文件，版本 ${subject.meta.version}`,
+  );
+  console.log(`  题型：${JSON.stringify(typeCounts)}`);
+  console.log(`  章节：${Object.keys(chapterCounts).length}`);
 }
 
 const appSource = fs.readFileSync(appFile, 'utf8');
@@ -118,10 +146,9 @@ for (const id of referencedIds) {
   }
 }
 
-console.log(`题目总数：${bank.length}`);
-console.log(`图片来源：${imageCount}`);
-console.log(`题型分布：${JSON.stringify(typeCounts)}`);
-console.log(`章节数量：${Object.keys(chapterCounts).length}`);
-console.log(`题库版本：${meta.version}（${meta.region}）`);
+console.log(`题目总数：${subjects.reduce((sum, subject) => sum + subject.bank.length, 0)}`);
+console.log(
+  `版本：${subjects.map((subject) => `${subject.name} ${subject.meta.version}`).join(' / ')}`,
+);
 console.log(errors ? `校验失败：${errors} 个问题` : '校验通过 ✅');
 process.exit(errors ? 1 : 0);

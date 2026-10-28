@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * 科一题库构建脚本
+ * 驾考题库构建脚本（科目一 + 科目四）
  *
  * 作用：
- * 1. 从公开的 2026 科目一题库 JSON 中筛选 subject=ke1 的数据；
+ * 1. 从公开的 2026 驾考题库 JSON 中分别筛选 subject=ke1 / ke4 的数据；
  * 2. 将题库中的 HTML 解析文本转换成纯文本，避免网页直接渲染第三方 HTML；
  * 3. 对“题干 + 选项”完全相同的重复题去重，同时保留源题库 ID 方便追溯；
- * 4. 只复制网页实际引用的题目图片，防止把科目四和标志库的无关资源一起打包；
- * 5. 生成浏览器可直接加载的 data.js，不依赖网络或构建工具。
+ * 4. 只复制网页实际引用的题目图片和视频，避免把标志库等无关资源一起打包；
+ * 5. 分别输出 KEMU1_BANK / KEMU4_BANK，方便页面按科目独立统计进度。
+ *
+ * ID 兼容策略：
+ * 科目一沿用原来的题号，保证已经保存的科一学习记录不丢失；
+ * 科目四统一加 k4- 前缀，规避两科源题号重叠导致的记录串题。
  *
  * 用法：
  *   node tools/build-kemu1-data.js /path/to/questions.json
@@ -69,87 +73,114 @@ function answerToIndexes(answer) {
     .sort((a, b) => a - b);
 }
 
+const SUBJECTS = [
+  { key: 'ke1', variable: 'KEMU1', exam: '科目一', idPrefix: '' },
+  { key: 'ke4', variable: 'KEMU4', exam: '科目四', idPrefix: 'k4-' },
+];
+
 /**
- * 同一题干配上同一组选项时，重复记录对练习没有价值。
- * 去重后把源 ID 合并进 sourceIds，后续仍能追溯题目来源。
+ * 同一科目内，题干和选项完全相同时才视为重复。
+ * 科目一、科目四即使题干相同，也可能属于不同考试，因此不能跨科目去重。
  */
-const bySignature = new Map();
-for (const source of sourceQuestions) {
-  if (!source || source.subject !== 'ke1' || !source.question || !source.options) continue;
+function buildSubject(subject) {
+  const bySignature = new Map();
+  for (const source of sourceQuestions) {
+    if (!source || source.subject !== subject.key || !source.question || !source.options) continue;
 
-  const options = source.options.map(htmlToText).filter(Boolean);
-  if (options.length < 2) continue;
+    const options = source.options.map(htmlToText).filter(Boolean);
+    if (options.length < 2) continue;
 
-  const answer = answerToIndexes(source.answer);
-  if (!answer.length || answer.some((index) => index >= options.length)) continue;
+    const answer = answerToIndexes(source.answer);
+    if (!answer.length || answer.some((index) => index >= options.length)) continue;
 
-  const signature = [htmlToText(source.question), ...options].join('\u0000');
-  const image = source.image ? path.basename(source.image) : '';
-  const normalized = {
-    id: source.qid ? String(source.qid) : String(source.id),
-    sourceIds: [String(source.id)],
-    type: source.type === 'multi' ? 'multi' : source.type === 'judge' ? 'judge' : 'single',
-    chapter: htmlToText(source.chapter_name || '其他'),
-    question: htmlToText(source.question),
-    options,
-    answer,
-    analysis: htmlToText(source.analysis),
-    mnemonic: htmlToText(source.mnemonic),
-    concise: htmlToText(source.concise_analysis),
-    image: image ? `questions/${image}` : '',
-  };
+    const signature = [htmlToText(source.question), ...options].join('\u0000');
+    const image = source.image ? path.basename(source.image) : '';
+    const sourceId = source.qid ? String(source.qid) : String(source.id);
+    const normalized = {
+      id: `${subject.idPrefix}${sourceId}`,
+      sourceIds: [String(source.id)],
+      subject: subject.key,
+      subjectName: subject.exam,
+      type: source.type === 'multi' ? 'multi' : source.type === 'judge' ? 'judge' : 'single',
+      chapter: htmlToText(source.chapter_name || '其他'),
+      question: htmlToText(source.question),
+      options,
+      answer,
+      analysis: htmlToText(source.analysis),
+      mnemonic: htmlToText(source.mnemonic),
+      concise: htmlToText(source.concise_analysis),
+      image: image ? `questions/${image}` : '',
+    };
 
-  const existing = bySignature.get(signature);
-  if (existing) {
-    existing.sourceIds.push(String(source.id));
-    continue;
+    const existing = bySignature.get(signature);
+    if (existing) {
+      existing.sourceIds.push(String(source.id));
+      continue;
+    }
+    bySignature.set(signature, normalized);
   }
-  bySignature.set(signature, normalized);
+  return [...bySignature.values()];
 }
 
-const questions = [...bySignature.values()];
-const copiedImages = new Set();
-for (const question of questions) {
-  if (!question.image) continue;
-  const filename = path.basename(question.image);
-  const sourceImage = path.join(sourceImageRoot, 'questions', filename);
-  if (!fs.existsSync(sourceImage)) {
-    console.warn(`图片缺失，已移除引用：${filename}`);
-    question.image = '';
-    continue;
-  }
-  if (!copiedImages.has(filename)) {
-    fs.copyFileSync(sourceImage, path.join(imageOutputRoot, filename));
-    copiedImages.add(filename);
-  }
-}
-
-const chapters = [...new Set(questions.map((question) => question.chapter))].sort((a, b) =>
-  a.localeCompare(b, 'zh-CN'),
+const subjectBanks = Object.fromEntries(
+  SUBJECTS.map((subject) => [subject.key, buildSubject(subject)]),
 );
 
-const meta = {
-  title: '厦门科目一快刷题库',
-  version: '2026.10',
-  exam: '科目一',
-  region: '厦门考区适用',
-  source: '公开 2026 科目一题库（题型整理，非官方实时接口）',
-  sourceRepository: 'https://github.com/xfhxly/KeMuONEXueKao',
-  generatedAt: new Date().toISOString(),
-  questionCount: questions.length,
-  imageCount: copiedImages.size,
-  chapters,
-};
+const copiedImages = new Set();
+for (const questions of Object.values(subjectBanks)) {
+  for (const question of questions) {
+    if (!question.image) continue;
+    const filename = path.basename(question.image);
+    const sourceImage = path.join(sourceImageRoot, 'questions', filename);
+    if (!fs.existsSync(sourceImage)) {
+      console.warn(`媒体缺失，已移除引用：${filename}`);
+      question.image = '';
+      continue;
+    }
+    if (!copiedImages.has(filename)) {
+      fs.copyFileSync(sourceImage, path.join(imageOutputRoot, filename));
+      copiedImages.add(filename);
+    }
+  }
+}
+
+const metas = Object.fromEntries(
+  SUBJECTS.map((subject) => {
+    const questions = subjectBanks[subject.key];
+    const chapters = [...new Set(questions.map((question) => question.chapter))].sort((a, b) =>
+      a.localeCompare(b, 'zh-CN'),
+    );
+    return [
+      subject.key,
+      {
+        title: `厦门${subject.exam}快刷题库`,
+        version: '2026.10',
+        exam: subject.exam,
+        region: '厦门考区适用',
+        source: `公开 2026 ${subject.exam}题库（题型整理，非官方实时接口）`,
+        sourceRepository: 'https://github.com/xfhxly/KeMuONEXueKao',
+        generatedAt: new Date().toISOString(),
+        questionCount: questions.length,
+        mediaCount: questions.filter((question) => question.image).length,
+        chapters,
+      },
+    ];
+  }),
+);
 
 const output = [
   '/* 自动生成文件，请运行 tools/build-kemu1-data.js 更新。 */',
-  `window.KEMU1_META = ${JSON.stringify(meta)};`,
-  `window.KEMU1_BANK = ${JSON.stringify(questions)};`,
+  ...SUBJECTS.flatMap((subject) => [
+    `window.${subject.variable}_META = ${JSON.stringify(metas[subject.key])};`,
+    `window.${subject.variable}_BANK = ${JSON.stringify(subjectBanks[subject.key])};`,
+  ]),
   '',
 ].join('\n');
 
 fs.writeFileSync(path.join(outputRoot, 'data.js'), output);
 
-console.log(
-  `已生成 ${questions.length} 题、${copiedImages.size} 张图片、${chapters.length} 个章节：${path.join(outputRoot, 'data.js')}`,
-);
+const summary = SUBJECTS.map((subject) => {
+  const meta = metas[subject.key];
+  return `${subject.exam} ${meta.questionCount} 题 / ${meta.chapters.length} 章`;
+}).join('，');
+console.log(`已生成 ${summary}，共 ${copiedImages.size} 个媒体文件：${path.join(outputRoot, 'data.js')}`);

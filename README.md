@@ -1,6 +1,6 @@
 # 软考高级 · 系统分析师 刷题系统
 
-> 新增：厦门小车科目一快刷页面，访问 `/kemu1.html`，说明见
+> 新增：厦门小车科目一、科目四快刷页面，访问 `/kemu1.html`，说明见
 > [`outputs/kemu1/README.md`](outputs/kemu1/README.md)。
 
 ## 在线地址（已部署）
