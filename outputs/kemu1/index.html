@@ -979,7 +979,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- data.js 先加载，app.js 再根据题库和本地记录初始化页面。 -->
-  <script src="./data.js"></script>
-  <script src="./app.js"></script>
+  <!-- 查询串用于内容更新时强制刷新 GitHub Pages / 浏览器的静态资源缓存。 -->
+  <script src="./data.js?v=20261028-2"></script>
+  <script src="./app.js?v=20261028-2"></script>
 </body>
 </html>
